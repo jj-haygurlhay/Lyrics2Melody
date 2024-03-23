@@ -3,5 +3,7 @@ numpy
 matplotlib
 seaborn
 torch
+labml_nn
 labml
+labml_helpers
 scikit-learn
