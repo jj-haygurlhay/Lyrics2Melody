@@ -1,0 +1,3 @@
+Validation using MMD:
+    https://www.kaggle.com/code/onurtunali/maximum-mean-discrepancy
+
