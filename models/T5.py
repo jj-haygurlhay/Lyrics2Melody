@@ -13,7 +13,7 @@ class Music_T5(nn.Module):
 
     def forward(self, input_ids, attention_mask=None):
         outputs = self.mt5(input_ids = input_ids, attention_mask = attention_mask)
-        sequence_outputs = outputs.last_hidden_state
+        sequence_output = outputs.last_hidden_state
 
         note_logits = self.note_head(sequence_output[:, -1, :])  # Predict from the last token's output
         duration_logits = self.duration_head(sequence_output[:, -1, :])
