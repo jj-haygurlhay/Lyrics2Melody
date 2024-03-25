@@ -18,7 +18,7 @@ class GPT2ForLyricsToMelody(GPT2PreTrainedModel):
         
         note_logits = self.note_head(sequence_output[:, -1, :])  # Predict from the last token's output
         duration_logits = self.duration_head(sequence_output[:, -1, :])
-        gap_logits = self.gap_head(sequence_output[:,:,-1])
+        gap_logits = self.gap_head(sequence_output[:,-1,:])
 
         return note_logits, duration_logits, gap_logits
 
