@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-from transformers import MT5Model, AutoTokenizer 
+from transformers import T5Model, AutoTokenizer 
 
 class Music_T5(nn.Module):
     def __init__(self, config, num_gaps, num_notes=128, num_durations=10):
         super().__init__(config)
-        self.mt5 = MT5Model(config)
+        self.mt5 = T5Model(config)
 
         self.note_head = nn.Linear(config.n_embd, num_notes)
         self.duration_head = nn.Linear(config.n_embd, num_durations)
