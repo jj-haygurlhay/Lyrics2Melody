@@ -7,3 +7,4 @@ labml_nn
 transformers
 tqdm
 scikit-learn
+mido
