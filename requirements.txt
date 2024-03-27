@@ -4,6 +4,7 @@ matplotlib
 seaborn
 torch
 labml_nn
-labml
-labml_helpers
+transformers
+tqdm
 scikit-learn
+mido
