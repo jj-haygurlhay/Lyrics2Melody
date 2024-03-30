@@ -5,8 +5,9 @@ from transformers import GPT2PreTrainedModel, GPT2Model
 from models.base_model import BaseModel
 
 class MusicGPT2(GPT2PreTrainedModel, BaseModel):
-    def __init__(self, config):
-        super(GPT2PreTrainedModel).__init__()
+    def __init__(self, config, note_loss_weight=1.0, duration_loss_weight=1.0, gap_loss_weight=1.0):
+        super(BaseModel).__init__(note_loss_weight=note_loss_weight, duration_loss_weight=duration_loss_weight, gap_loss_weight=gap_loss_weight)
+        super(GPT2PreTrainedModel).__init__(config)
         self.gpt2 = GPT2Model(config)
         
         # Custom head for predicting MIDI notes and durations
@@ -29,7 +30,7 @@ class MusicGPT2(GPT2PreTrainedModel, BaseModel):
         duration_loss = nn.CrossEntropyLoss()(duration_logits, duration_targets)
         gap_loss = nn.CrossEntropyLoss()(gap_logits, gap_targets)
 
-        return note_loss + duration_loss + gap_loss
+        return self.note_loss_weight * note_loss + self.duration_loss_weight * duration_loss + self.gap_loss_weight * gap_loss
 
     # Assuming MIDI notes are encoded as integers [0, 127] and durations are also integers
     def decode_model_output(self, note_logits, duration_logits, gap_logits):

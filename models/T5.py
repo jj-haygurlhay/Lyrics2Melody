@@ -5,8 +5,8 @@ from transformers import T5Model
 from models.base_model import BaseModel 
 
 class MusicT5(BaseModel):
-    def __init__(self, config):
-        super().__init__()
+    def __init__(self, config, note_loss_weight=1.0, duration_loss_weight=1.0, gap_loss_weight=1.0):
+        super().__init__(note_loss_weight=note_loss_weight, duration_loss_weight=duration_loss_weight, gap_loss_weight=gap_loss_weight)
         self.t5 = T5Model(config)
 
         # Custom head for predicting MIDI notes and durations
@@ -30,7 +30,7 @@ class MusicT5(BaseModel):
         duration_loss = nn.CrossEntropyLoss()(duration_logits, duration_targets)
         gap_loss = nn.CrossEntropyLoss()(gap_logits, gap_targets)
 
-        return note_loss + duration_loss + gap_loss
+        return self.note_loss_weight * note_loss + self.duration_loss_weight * duration_loss + self.gap_loss_weight * gap_loss
     
     # Example instantiation
     # config = T5Config.from_pretrained('t5-small')
