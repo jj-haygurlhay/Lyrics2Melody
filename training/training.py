@@ -4,9 +4,8 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 from tqdm.auto import tqdm
 
 class Trainer:
-    def __init__(self, model, tokenizer, train_dataset, val_dataset, test_dataset, device, collator, epochs=4, lr=5e-5):
+    def __init__(self, model, train_dataset, val_dataset, test_dataset, device, collator, epochs=4, batch_size=16, lr=5e-5):
         self.model = model
-        self.tokenizer = tokenizer
         
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
@@ -15,16 +14,17 @@ class Trainer:
         self.device = device
         self.collator = collator
         self.epochs = epochs
-        
-        self.optimizer = AdamW(model.parameters(), lr=lr)
+        self.lr = float(lr)
+        self.optimizer = AdamW(model.parameters(), lr=self.lr)
         self.scheduler = get_linear_schedule_with_warmup(
             self.optimizer, 
             num_warmup_steps=0, 
             num_training_steps=len(train_dataset) * epochs
         )
+        self.batch_size = batch_size
 
     def train(self):
-        train_loader = DataLoader(self.train_dataset, batch_size=128, shuffle=True, collate_fn=self.collator)
+        train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, collate_fn=self.collator)
         self.model.to(self.device)
         self.model.train()
 
