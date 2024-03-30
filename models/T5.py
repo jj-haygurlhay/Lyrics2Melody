@@ -10,9 +10,9 @@ class MusicT5(BaseModel):
         self.t5 = T5Model(config)
 
         # Custom head for predicting MIDI notes and durations
-        self.note_head = nn.Linear(config.n_embd, len(self.valid_midi_notes))
-        self.duration_head = nn.Linear(config.n_embd, len(self.valid_durations))
-        self.gap_head = nn.Linear(config.n_embd, len(self.valid_gaps))
+        self.note_head = nn.Linear(config.d_model, len(self.valid_midi_notes))
+        self.duration_head = nn.Linear(config.d_model, len(self.valid_durations))
+        self.gap_head = nn.Linear(config.d_model, len(self.valid_gaps))
 
     def forward(self, input_ids, attention_mask=None, encoder_outputs=None):
         outputs = self.t5(input_ids = input_ids, attention_mask = attention_mask, encoder_outputs = encoder_outputs)

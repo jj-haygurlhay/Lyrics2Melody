@@ -26,7 +26,9 @@ def main():
     del config['model']['model_name']
 
     if 't5' in model_name:
-        t5_config = T5Config.from_pretrained('t5-small')
+        t5_config = T5Config.from_pretrained(
+            't5-small'
+            )
         print(t5_config)
         model = MusicT5(t5_config, **config['model']) # TODO create config object
         tokenizer = T5Tokenizer.from_pretrained(pretrained_model_name_or_path='t5-small')
