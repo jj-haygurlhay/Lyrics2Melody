@@ -97,7 +97,7 @@ class Trainer:
     def test(self):
         self.model.eval()
         total_loss = 0
-        progress_bar = tqdm(test_loader, desc="Testing")
+        progress_bar = tqdm(self.test_loader, desc="Testing")
 
         with torch.no_grad():
             for batch in progress_bar:
@@ -110,7 +110,9 @@ class Trainer:
                 total_loss += loss.item()
 
         print(f"\nTest Loss: {total_loss / len(self.test_loader)}")
-        self.writer.add_scalar("Loss/Test", total_loss / len(sself.test_loader))
+        self.writer.add_scalar("Loss/Test", total_loss / len(self.test_loader))
+        
+        return outputs
 
     def save_model(self, epoch, name=""):
         os.makedirs(self.checkpoint_path, exist_ok=True)
