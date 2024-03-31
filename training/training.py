@@ -87,7 +87,7 @@ class Trainer:
                 total_loss += loss.item()
 
         avg_validation_loss = total_loss / len(self.val_loader)
-        print(f"Validation Loss: {avg_validation_loss}")
+        print(f"\nEpoch {epoch+1}, Validation Loss: {avg_validation_loss}")
         self.writer.add_scalar("Loss/Validation", avg_validation_loss, epoch)
 
         if avg_validation_loss < self.best_val_loss:
@@ -112,7 +112,6 @@ class Trainer:
         print(f"\nTest Loss: {total_loss / len(self.test_loader)}")
         self.writer.add_scalar("Loss/Test", total_loss / len(self.test_loader))
         
-        return outputs
 
     def save_model(self, epoch, name=""):
         os.makedirs(self.checkpoint_path, exist_ok=True)

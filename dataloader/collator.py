@@ -20,7 +20,7 @@ class SongsCollator:
             duration_token = f"<duration{duration}>"
             gap_token = f"<gap{gap}>"
             serialized_seq.append(f"{note_token} {duration_token} {gap_token}")
-        return " ".join(serialized_seq)
+        return "_".join(serialized_seq)
 
     def __call__(self, batch):
         lyrics_texts = [item['syl_lyrics'] if self.use_syllables else item['lyrics'] for item in batch]
