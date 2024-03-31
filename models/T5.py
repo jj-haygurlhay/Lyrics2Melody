@@ -1,59 +1,47 @@
-import torch
-import torch.nn as nn
-from transformers import T5Model
-
 from models.base_model import BaseModel 
+from transformers import T5ForConditionalGeneration
 
 class MusicT5(BaseModel):
     def __init__(self, config, note_loss_weight=1.0, duration_loss_weight=1.0, gap_loss_weight=1.0):
         super().__init__(note_loss_weight=note_loss_weight, duration_loss_weight=duration_loss_weight, gap_loss_weight=gap_loss_weight)
-        self.t5 = T5Model(config)
-
-        # Custom head for predicting MIDI notes and durations
-        self.note_head = nn.Linear(config.d_model, len(self.valid_midi_notes))
-        self.duration_head = nn.Linear(config.d_model, len(self.valid_durations))
-        self.gap_head = nn.Linear(config.d_model, len(self.valid_gaps))
-
-    def forward(self, input_ids, attention_mask=None, encoder_outputs=None):
-        outputs = self.t5(input_ids = input_ids, attention_mask = attention_mask, encoder_outputs = encoder_outputs)
-        sequence_output = outputs.last_hidden_state
-
-        # Note: [:, -1, :] because we treat it as a classification problem 
-        note_logits = self.note_head(sequence_output[:, -1, :]) 
-        duration_logits = self.duration_head(sequence_output[:, -1, :])
-        gap_logits = self.gap_head(sequence_output[:,-1,:])
-
-        return note_logits, duration_logits, gap_logits
+        # conditional generation -> designed for seq-to-seq tasks
+        self.t5 = T5ForConditionalGeneration(config)
     
-    def custom_loss(self, note_logits, duration_logits, gap_logits, note_targets, duration_targets, gap_targets):
-        note_loss = nn.CrossEntropyLoss()(note_logits, note_targets)
-        duration_loss = nn.CrossEntropyLoss()(duration_logits, duration_targets)
-        gap_loss = nn.CrossEntropyLoss()(gap_logits, gap_targets)
-
-        return self.note_loss_weight * note_loss + self.duration_loss_weight * duration_loss + self.gap_loss_weight * gap_loss
+    def forward(self, input_ids, attention_mask=None, labels=None):
+        """
+        For training, labels should be provided. For inference/generation, labels will be None.
+        """
+        outputs = self.t5(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+        
+        return outputs
     
-    # Example instantiation
-    # config = T5Config.from_pretrained('t5-small')
-    # t5_model = MusicT5(config)
+    def generate(self, input_ids, attention_mask=None, **generation_kwargs):
+        """
+        Generate method for inference. 
+        Can give additional arguments for generation such as max_length, 
+        num_beams, etc., as keyword arguments (generation_kwargs).
+        """
+        generated_tokens = self.t5.generate(input_ids=input_ids, attention_mask=attention_mask, **generation_kwargs)
+        
+        return generated_tokens
+    
+    def decode_generated_sequence(self, tokenizer, generated_token_ids):
+        # Convert token IDs back to tokens (words)
+        tokens = tokenizer.convert_ids_to_tokens(generated_token_ids, skip_special_tokens=True)
+        
+        notes = []
+        durations = []
+        gaps = []
+        
+        for token in tokens:
+            if token.startswith("note"):
+                note = int(token.replace("note", ""))
+                notes.append(note)
+            elif token.startswith("duration"):
+                duration = float(token.replace("duration", ""))
+                durations.append(duration)
+            elif token.startswith("gap"):
+                gap = float(token.replace("gap", ""))
+                gaps.append(gap)
 
-    # Assuming MIDI notes are encoded as integers [0, 127] and durations are also integers
-    def decode_model_output(self, note_logits, duration_logits, gap_logits):
-        # Softmax to convert logits to probabilities, then argmax to get most likely MIDI note
-        predicted_notes = torch.argmax(torch.softmax(note_logits, dim=-1), dim=-1)
-        
-        # Similarly, for durations, assuming they are categorized (you may need to adjust based on your actual encoding)
-        predicted_durations = torch.argmax(torch.softmax(duration_logits, dim=-1), dim=-1)
-        
-        # Softmax to convert logits to probabilities then argmax to get most likely gap
-        predicted_gaps = torch.argmax(torch.softmax(gap_logits, dim=-1), dim=-1)
-
-        # Convert tensors to lists for further processing if necessary
-        decoded_notes = predicted_notes.tolist()
-        decoded_durations = predicted_durations.tolist()
-        decoded_gaps = predicted_gaps.tolist()
-        
-        # Mapping back to actual durations/gap times -> implement nice global variables for this
-        decoded_durations = [self.valid_durations[index] for index in decoded_durations]
-        decoded_gaps = [self.valid_gaps[index] for index in decoded_gaps]
-        
-        return decoded_notes, decoded_durations, decoded_gaps 
+        return notes, durations, gaps

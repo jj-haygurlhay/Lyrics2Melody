@@ -1,33 +1,46 @@
 import torch
 import json
+import numpy as np
 
 class SongsCollator:
-    def __init__(self, tokenizer, output_eos=[0,0,0], max_length=128, use_syllables=False):
+    def __init__(self, tokenizer, output_eos="[PAD]", max_length=128, use_syllables=False):
         self.tokenizer = tokenizer
         self.output_eos = output_eos
         self.max_length = max_length
         self.use_syllables = use_syllables
 
+    def serialize_melody(self, midi_seq):
+        """
+        Serialize MIDI sequence to a string format for tokenization.
+        Each note-duration-gap triplet is concatenated into a single string with separators.
+        """
+        serialized_seq = []
+        for note, duration, gap in midi_seq:
+            note_token = f"<note{note}>"
+            duration_token = f"<duration{duration}>"
+            gap_token = f"<gap{gap}>"
+            serialized_seq.append(f"{note_token} {duration_token} {gap_token}")
+        return " ".join(serialized_seq)
+
     def __call__(self, batch):
-        if self.use_syllables:
-            lyrics = [item['syl_lyrics'] for item in batch]
-        else:
-            lyrics = [item['lyrics'] for item in batch]
+        lyrics_texts = [item['syl_lyrics'] if self.use_syllables else item['lyrics'] for item in batch]
+        lyrics_encoding = self.tokenizer(lyrics_texts, return_tensors='pt', padding=True, truncation=True, max_length=self.max_length)
 
-        # Tokenize the lyrics
-        encoding = self.tokenizer(lyrics, return_tensors='pt', padding=True, truncation=True, max_length=self.max_length)
+        target_texts = []
 
-        # Add the midi notes (labels) to the encoding
-        midi_notes = []
         for item in batch:
-            # Truncate the midi notes to the max_length
             midi_seq = json.loads(item['midi_notes'])[:self.max_length]
-            
-            # Pad the midi notes to the max_length
-            midi_seq += [self.output_eos] * (self.max_length - len(midi_seq))
-            
-            midi_notes.append(midi_seq)
+            serialized_melody = self.serialize_melody(midi_seq)
+            target_texts.append(serialized_melody)
 
-        encoding['midi_notes'] = torch.tensor(midi_notes)
+        # Note: T5's tokenizer will handle padding of tokenized sequences to max_length
+        targets_encoding = self.tokenizer(target_texts, return_tensors='pt', padding='max_length', truncation=True, max_length=self.max_length)
+
+        # input_ids for labels as T5 expects the decoder input in the form of token IDs
+        encoding = {
+            "input_ids": lyrics_encoding['input_ids'],
+            "attention_mask": lyrics_encoding['attention_mask'],
+            "labels": targets_encoding['input_ids']
+        }
 
         return encoding

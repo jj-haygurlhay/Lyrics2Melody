@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup
+from torch.optim import AdamW
 from tqdm.auto import tqdm
 
 class Trainer:
@@ -16,26 +17,28 @@ class Trainer:
         self.epochs = epochs
         self.lr = float(lr)
         self.optimizer = AdamW(model.parameters(), lr=self.lr)
-        self.scheduler = get_linear_schedule_with_warmup(
-            self.optimizer, 
-            num_warmup_steps=0, 
-            num_training_steps=len(train_dataset) * epochs
-        )
+        num_training_steps = int(len(train_dataset) / batch_size * epochs)
+        self.scheduler = get_linear_schedule_with_warmup(self.optimizer, num_warmup_steps=0, num_training_steps=num_training_steps)
+        
         self.batch_size = batch_size
 
     def train(self):
-        train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, collate_fn=self.collator)
         self.model.to(self.device)
         self.model.train()
 
         for epoch in range(self.epochs):
+            train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, collate_fn=self.collator)
             total_loss = 0
             progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}")
+
             for batch in progress_bar:
                 self.optimizer.zero_grad()
 
-                input_ids, labels = batch['input_ids'].to(self.device), batch['labels'].to(self.device)
-                outputs = self.model(input_ids=input_ids, labels=labels)
+                input_ids = batch['input_ids'].to(self.device)
+                attention_mask = batch['attention_mask'].to(self.device)
+                labels = batch['labels'].to(self.device)
+
+                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                 loss = outputs.loss
 
                 loss.backward()
