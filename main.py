@@ -12,7 +12,6 @@ from transformers import (
     set_seed
 )
 from dataloader import SongsDataset, SongsCollator
-from inference.generate_midi import GenerateMidi
 
 HYPS_FILE = './config/hyps.yaml'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,21 +75,6 @@ def main():
 
     # Train model
     custom_trainer.train()
-
-    # Decode generated tokens
-    # notes, durations, gaps = [], [], []
-    # for token_ids in generated_tokens:
-    #     n, d, g = custom_trainer.model.decode_generated_sequence(custom_trainer.tokenizer, token_ids)
-    #     notes.extend(n)
-    #     durations.extend(d)
-    #     gaps.extend(g)
-
-    # # Generate MIDI file using your GenerateMidi class
-    # # Assuming your GenerateMidi class has a method called 'create_midi'
-    # generate_midi = GenerateMidi(notes, durations, gaps)  # or however you instantiate this class
-    # midi_file_path = 'output.mid'  # Define your desired output file path
-    # generate_midi.save_midi(midi_file_path)
-    # print(f"MIDI file generated: {midi_file_path}")
 
 if __name__ == "__main__":
     main()
