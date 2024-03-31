@@ -1,4 +1,11 @@
 import collections
+
+def _get_ngrams(token_list, n):
+        return zip(*[token_list[i:] for i in range(n)])
+
+def count_ngrams(token_list, n):
+     return collections.Counter(x for x in _get_ngrams(token_list,n))
+
 def ngrams_iterator(token_list, ngrams):
     """MODIFIED VERSION OF torchtext.data.utils
 
@@ -16,13 +23,10 @@ def ngrams_iterator(token_list, ngrams):
         >>> ['here', 'here we', 'we', 'we are', 'are']
     """
 
-    def _get_ngrams(n):
-        return zip(*[token_list[i:] for i in range(n)])
-
     for x in token_list:
         yield (x,)
     for n in range(2, ngrams + 1):
-        for x in _get_ngrams(n):
+        for x in _get_ngrams(token_list, n):
             yield tuple(x)
 
 def _compute_ngram_counter(tokens, max_n):
@@ -53,3 +57,16 @@ def _compute_ngram_counter(tokens, max_n):
     ngrams_counter = collections.Counter(x for x in ngrams_iterator(tokens, max_n))
 
     return ngrams_counter
+
+def ngram_repetition(token_list,n):
+    return sum([x - 1 for x in count_ngrams(token_list,n).values()])
+
+def test():
+    pred = [[(1,1),(2,2),(3,3),(4,4),(1,1),(5,5)]]
+    print(count_ngrams(pred[0],2))
+    print(ngram_repetition(pred[0],2))
+    pred = [[1,2,3,4,1,5]]
+    print(count_ngrams(pred[0],2))
+
+if __name__ =="__main__":
+    test()
