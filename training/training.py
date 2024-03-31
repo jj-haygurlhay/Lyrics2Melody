@@ -59,8 +59,11 @@ class Trainer:
 
         with torch.no_grad():
             for batch in progress_bar:
-                input_ids, labels = batch['input_ids'].to(self.device), batch['labels'].to(self.device)
-                outputs = self.model(input_ids=input_ids, labels=labels)
+                input_ids = batch['input_ids'].to(self.device)
+                attention_mask = batch['attention_mask'].to(self.device)
+                labels = batch['labels'].to(self.device)
+                
+                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                 loss = outputs.loss
                 total_loss += loss.item()
 
@@ -74,8 +77,11 @@ class Trainer:
 
         with torch.no_grad():
             for batch in progress_bar:
-                input_ids, labels = batch['input_ids'].to(self.device), batch['labels'].to(self.device)
-                outputs = self.model(input_ids=input_ids, labels=labels)
+                input_ids = batch['input_ids'].to(self.device)
+                attention_mask = batch['attention_mask'].to(self.device)
+                labels = batch['labels'].to(self.device)
+                
+                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                 loss = outputs.loss
                 total_loss += loss.item()
 
