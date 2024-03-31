@@ -1,7 +1,9 @@
 import yaml
 import torch
+from torch.utils.data import DataLoader
 from models import MusicT5, MusicGPT2
-from training import Trainer
+from training import Trainer as CustomTrainer
+# from pytorch_lightning import Trainer as PLTrainer
 from transformers import (
     GPT2Tokenizer, 
     GPT2Config, 
@@ -20,6 +22,8 @@ def main():
     
     # Set seed
     set_seed(config['seed'])
+
+    # pl_trainer = PLTrainer()
 
     # Load model and tokenizer
     model_name = config['model']['model_name']
@@ -40,27 +44,37 @@ def main():
         tokenizer.pad_token = tokenizer.eos_token
     else:
         raise ValueError("Model not implemented")
-    
+
+    model.to(device)
 
     # Create dataset and collator
+    batch_size = config['training']['batch_size']
+
     train_dataset = SongsDataset(config['data']['data_dir'], split='train')
     valid_dataset = SongsDataset(config['data']['data_dir'], split='valid')
     test_dataset  = SongsDataset(config['data']['data_dir'], split='test')
     collator = SongsCollator(tokenizer=tokenizer, output_eos=config['data']['output_eos'], max_length=config['data']['max_sequence_length'], use_syllables=config['data']['use_syllables'])
+    
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collator, pin_memory=True, num_workers=4)
+    val_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator, pin_memory=True, num_workers=4)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator, pin_memory=True, num_workers=4)
+
+    # pl_trainer.fit(model, tokenizer, train_loader, val_loader, test_loader)
 
     # Create trainer
-    trainer = Trainer(
+    custom_trainer = CustomTrainer(
         model=model, 
-        train_dataset=train_dataset,  
-        val_dataset=valid_dataset,
-        test_dataset=test_dataset,
+        pl_trainer=None,
         device=device,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        test_loader=test_loader,
         collator=collator,
         **config['training']
     )
 
     # Train model
-    trainer.train()
+    custom_trainer.train()
 
 if __name__ == "__main__":
     main()
