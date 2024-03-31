@@ -6,13 +6,13 @@ model:
 
 training:
   batch_size: 8
-  epochs: 3
+  epochs: 4
   lr: 1e-4
 
 data:
   data_dir: './data/new_dataset'
   max_sequence_length: 512
   output_eos: [-1, -1, -1]
-  use_syllables: True
+  use_syllables: False
 
 seed: 42
