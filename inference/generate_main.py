@@ -1,4 +1,3 @@
-from inference.generate_midi import GenerateMidi
 import yaml
 import torch
 from torch.utils.data import DataLoader
@@ -13,16 +12,29 @@ from transformers import (
     set_seed
 )
 from dataloader import SongsDataset, SongsCollator
+from .generate_midi import GenerateMidi
 
 HYPS_FILE = './config/hyps.yaml'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def generate_main():
-    model_path = 'path/to/your/trained_model.bin'
-    test_dataset_path = 'path/to/your/test_dataset'
-
-# Load the trained model
-    model = MusicT5()
+def generate_main(model_path, model_name, test_dataset_path):
+    
+    if 't5' in model_name:
+        t5_config = T5Config.from_pretrained(
+            't5-small'
+            )
+        print(t5_config)
+        model = MusicT5(t5_config, **config['model']) # TODO create config object
+        tokenizer = T5Tokenizer.from_pretrained(pretrained_model_name_or_path='t5-small')
+    elif 'gpt' in model_name:
+        gpt2_config = GPT2Config.from_pretrained('gpt2')
+        model = MusicGPT2(gpt2_config, **config['model']) # TODO create config object
+        tokenizer = GPT2Tokenizer.from_pretrained(pretrained_model_name_or_path='gpt2')
+        tokenizer.padding_side = "left"
+        tokenizer.pad_token = tokenizer.eos_token
+    else:
+        raise ValueError("Model not implemented")
+    
     model.load_state_dict(torch.load(model_path))
     model = model.to(device)
     model.eval()  # Set the model to evaluation mode
@@ -49,4 +61,7 @@ def generate_main():
 
 
 if __name__ == "__main__":
-    generate_main()
+    model_path = 'checkpoints/model_epoch_4.bin'
+    data_path = 'data/dataset_matrices/test_data_matrix.npy'
+    model_name = 't5'
+    generate_main(model_path=model_path, model_name=model_name, test_dataset_path = data_path)
