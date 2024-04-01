@@ -18,6 +18,11 @@ HYPS_FILE = './config/hyps.yaml'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def generate_main(model_path, model_name, test_dataset_path):
+    with open(HYPS_FILE, "r") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    
+    # Set seed
+    set_seed(config['seed'])
     
     if 't5' in model_name:
         t5_config = T5Config.from_pretrained(
