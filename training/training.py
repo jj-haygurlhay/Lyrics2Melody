@@ -87,7 +87,7 @@ class Trainer:
                 total_loss += loss.item()
 
         avg_validation_loss = total_loss / len(self.val_loader)
-        print(f"\nEpoch {epoch+1}, Validation Loss: {avg_validation_loss}")
+        print(f"Validation Loss: {avg_validation_loss}")
         self.writer.add_scalar("Loss/Validation", avg_validation_loss, epoch)
 
         if avg_validation_loss < self.best_val_loss:
@@ -111,7 +111,6 @@ class Trainer:
 
         print(f"\nTest Loss: {total_loss / len(self.test_loader)}")
         self.writer.add_scalar("Loss/Test", total_loss / len(self.test_loader))
-        
 
     def save_model(self, epoch, name=""):
         os.makedirs(self.checkpoint_path, exist_ok=True)
@@ -120,4 +119,4 @@ class Trainer:
         else:
             model_save_path = f"./{self.checkpoint_path}/model_epoch_{name}.bin"
         torch.save(self.model.state_dict(), model_save_path)
-        logging.info(f"Saved model checkpoint to {model_save_path}")
+        print(f"Saved model checkpoint to {model_save_path}")
