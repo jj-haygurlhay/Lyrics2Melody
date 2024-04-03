@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from models import MusicT5, MusicGPT2
 from datasets import load_dataset, load_metric
 from training import Trainer as CustomTrainer
+import evaluate
 # from pytorch_lightning import Trainer as PLTrainer
 from transformers import (
     GPT2Tokenizer, 
@@ -15,6 +16,7 @@ from transformers import (
     Seq2SeqTrainingArguments,
     Seq2SeqTrainer, 
     AutoModelForSeq2SeqLM,
+    T5ForConditionalGeneration,
     AutoTokenizer,
     GenerationConfig,
     set_seed
@@ -39,7 +41,11 @@ def serialize_melody(midi_seq):
         duration_token = f"<duration{encode_duration(duration)}>"
         gap_token = f"<gap{encode_gap(gap)}>"
         serialized_seq.append(f"{note_token} {duration_token} {gap_token}")
+        # serialized_seq.append(encode_note(note))
+        # serialized_seq.append(encode_duration(duration))
+        # serialized_seq.append(encode_gap(gap))
     return " ".join(serialized_seq)
+    #return serialized_seq
 
 def main():
     with open(HYPS_FILE, "r") as f:
@@ -56,9 +62,9 @@ def main():
     #gen_config.max_length = config['data']['max_sequence_length']
 
 
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    model = T5ForConditionalGeneration.from_pretrained(model_name)
     model.generation_config = gen_config
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = T5Tokenizer.from_pretrained(model_name, legacy=False)
     tokenizer.add_tokens([f'<note{i}>' for i in range(len(MIDI_NOTES))])
     tokenizer.add_tokens([f'<duration{i}>' for i in range(len(DURATIONS))])
     tokenizer.add_tokens([f'<gap{i}>' for i in range(len(GAPS))])
@@ -73,19 +79,20 @@ def main():
 
     def preprocess_function(examples):
         
-        inputs = ['Generate notes: ' + lyrics for lyrics in examples['lyrics']]
+        inputs = ['notes: ' + lyrics for lyrics in examples['lyrics']]
         targets = examples['midi_notes']
         results = tokenizer(inputs, truncation=True, max_length=config['data']['max_sequence_length'])
         target_texts = []
 
         for item in targets:
-            
-            midi_seq = json.loads(item)[:config['data']['max_sequence_length']]
+            midi_seq = json.loads(item)
             serialized_melody = serialize_melody(midi_seq)
             target_texts.append(serialized_melody)
-        targets_encoding = tokenizer(target_texts, truncation=True, max_length=config['data']['max_sequence_length'])
 
+        targets_encoding = tokenizer(target_texts, truncation=True, max_length=config['data']['max_sequence_length'])
+        #print(targets_encoding['input_ids'])
         results['labels'] = targets_encoding['input_ids']
+        #results['labels'] = target_texts
         return results
 
     dataset = dataset.map(preprocess_function, batched=True)
@@ -97,6 +104,7 @@ def main():
     args = Seq2SeqTrainingArguments(
         out_dir,
         logging_dir= out_dir,
+        optim='adafactor', # 'adam' or 'adafactor
         evaluation_strategy="epoch",
         logging_strategy="steps",
         logging_steps=200,
@@ -107,7 +115,7 @@ def main():
         per_device_eval_batch_size=batch_size,
         weight_decay=0.01,
         save_total_limit=3,
-        num_train_epochs=3,
+        num_train_epochs=4,
         predict_with_generate=True,
         fp16=True,
         load_best_model_at_end=True,
@@ -115,7 +123,7 @@ def main():
         report_to="tensorboard",
     )
 
-    metric = load_metric("rouge")
+    metric = evaluate.load('rouge')
 
     def compute_metrics(eval_pred):
         predictions, labels = eval_pred
@@ -134,9 +142,6 @@ def main():
         # Compute ROUGE scores
         result = metric.compute(predictions=decoded_preds, references=decoded_labels,
                                 use_stemmer=True)
-
-        # Extract ROUGE f1 scores
-        result = {key: value.mid.fmeasure * 100 for key, value in result.items()}
         
         # Add mean generated length to metrics
         prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id)
@@ -158,6 +163,6 @@ def main():
     # Train model
     custom_trainer.train()
     custom_trainer.save_model()
-    custom_trainer.save_metrics()
+
 if __name__ == "__main__":
     main()

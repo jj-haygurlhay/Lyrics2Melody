@@ -1,18 +1,22 @@
 model:
   model_name: 't5'
-  note_loss_weight: 1.0
-  duration_loss_weight: 1.0
-  gap_loss_weight: 1.0
+  dropout: 0.2
 
 training:
-  batch_size: 8
-  epochs: 4
-  lr: 1e-4
+  batch_size: 64
+  epochs: 2
+  lr: 1e-5
+  weight_decay: 0.01
+  train_encoder: True
+  note_loss_weight: 0.4
+  duration_loss_weight: 0.2
+  gap_loss_weight: 0.1
+
 
 data:
   data_dir: './data/new_dataset'
-  max_sequence_length: 512
-  output_eos: [-1, -1, -1]
+  max_sequence_length: 200
+  output_eos: 1
   use_syllables: False
 
 seed: 42
