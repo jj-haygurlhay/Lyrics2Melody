@@ -43,11 +43,14 @@ def decode_midi_sequence(decoded_output_notes, decoded_output_durations, decoded
         note = note.item()
         duration = duration.item()
         gap = gap.item()
-        if note == 1 or duration == 1 or gap == 1: # Reached end of sequence token
+        if note == 1 or duration == 1 or gap == 1: # EOS token
             break
+        if note == 0 or duration == 0 or gap == 0: # SOS token
+            continue
         sequence.append([decode_note(note-2), decode_duration(duration-2), decode_gap(gap-2)])
     return sequence
 
 midi_sequence = decode_midi_sequence(decoded_output_notes, decoded_output_durations, decoded_output_gaps)
 print(midi_sequence)
-
+print('Inputs length:', len(inputs['input_ids'][0]))
+print('Outputs length:', len(midi_sequence))

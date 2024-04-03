@@ -34,11 +34,16 @@ class CustomModel(BaseModel):
     def forward(self, x, attn, target=None):
         if not self.train_encoder:
             with torch.no_grad():
-                encoder_hidden, encoder_outputs = self.encoder(x, attn, return_dict=False, output_hidden_states=True, output_attentions=False)
+                output = self.encoder(x, attn, output_hidden_states=True, output_attentions=False)
+                encoder_outputs = output.hidden_states[0]
+                encoder_hidden = output.last_hidden_state
         else:
-            encoder_hidden, encoder_outputs  = self.encoder(x, attn, return_dict=False, output_hidden_states=True, output_attentions=False)
+            output = self.encoder(x, attn, output_hidden_states=True, output_attentions=False)
+            encoder_outputs = output.hidden_states[0]
+            encoder_hidden = output.last_hidden_state
+            
         encoder_hidden = encoder_hidden.permute(1, 0, 2)[-1, :, :].unsqueeze(0).contiguous()
-        decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions = self.decoder(encoder_outputs[0], encoder_hidden, target)
+        decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions = self.decoder(encoder_outputs, encoder_hidden, target)
         return decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions
 
 

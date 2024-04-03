@@ -51,7 +51,7 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 def train_epoch(dataloader, model, encoder_optimizer,
-          decoder_optimizer, criterion, epoch):
+          decoder_optimizer, criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight):
 
     total_loss = 0
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}")
@@ -83,7 +83,7 @@ def train_epoch(dataloader, model, encoder_optimizer,
             decoder_outputs_gaps.view(-1, decoder_outputs_gaps.size(-1)),
             target_gaps.view(-1)
         )
-        loss = 0.8 * loss_notes + 0.2 * loss_durations + 0.2 * loss_gaps
+        loss = note_loss_weight * loss_notes + duration_loss_weight * loss_durations + gap_loss_weight * loss_gaps
 
         loss.backward()
 
@@ -97,7 +97,7 @@ def train_epoch(dataloader, model, encoder_optimizer,
     return total_loss / len(dataloader)
 
 def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001, weight_decay=0.01,
-               plot_every=1, train_encoder=False):
+               plot_every=1, train_encoder=False, note_loss_weight=0.8, duration_loss_weight=0.2, gap_loss_weight=0.2):
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
     plot_loss_total = 0  # Reset every plot_every
@@ -111,7 +111,7 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
 
     for epoch in range(1, n_epochs + 1):
         model.train()
-        loss = train_epoch(train_dataloader, model, encoder_optimizer, decoder_optimizer, criterion, epoch)
+        loss = train_epoch(train_dataloader, model, encoder_optimizer, decoder_optimizer, criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight)
         plot_loss_total += loss
 
         print(f"Epoch {epoch}, training Loss: {loss}")
@@ -121,10 +121,10 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
         plot_loss_total = 0
 
         model.eval()
-        val_loss = evaluate_model(model, val_dataloader, criterion)
+        val_loss = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight)
         print(f"Epoch {epoch}, Validation Loss: {val_loss}")
 
-def evaluate_model(model, dataloader, criterion):
+def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight):
     with torch.no_grad():
         total_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Validation: ")
@@ -150,7 +150,7 @@ def evaluate_model(model, dataloader, criterion):
                 decoder_outputs_gaps.view(-1, decoder_outputs_gaps.size(-1)),
                 target_gaps.view(-1)
             )
-            loss = 0.8 * loss_notes + 0.2 * loss_durations + 0.2 * loss_gaps
+            loss = note_loss_weight * loss_notes + duration_loss_weight * loss_durations + gap_loss_weight * loss_gaps
 
             total_loss += loss.item()
             progress_bar.set_postfix({'Validation Loss': total_loss / len(dataloader)})
@@ -205,7 +205,18 @@ def main():
     val_loader   = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator, pin_memory=True, num_workers=0)
     test_loader  = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator, pin_memory=True,  num_workers=0)
 
-    train(train_loader, val_loader, model, n_epochs=config['training']['epochs'], learning_rate=config['training']['lr'], weight_decay=config['training']['weight_decay'], train_encoder=train_encoder)
+    train(
+        train_loader, 
+        val_loader, 
+        model, 
+        n_epochs=config['training']['epochs'], 
+        learning_rate=config['training']['lr'], 
+        weight_decay=config['training']['weight_decay'], 
+        train_encoder=train_encoder,
+        note_loss_weight=config['training']['note_loss_weight'],
+        duration_loss_weight=config['training']['duration_loss_weight'],
+        gap_loss_weight=config['training']['gap_loss_weight']
+        )
     torch.save(model.state_dict(), 'model.pth')
 
 if __name__ == "__main__":
