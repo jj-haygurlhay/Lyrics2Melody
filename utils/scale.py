@@ -54,6 +54,10 @@ class scale:
         Takes a sequence of notes and fits it to this scale.
         """
         return [round(note + self.difference(note)) for note in notes]
+    
+def find_closest_fit(notes, durations, scales):
+    appartenances = [scale_candidate.melody_appartenance(notes, durations) for scale_candidate in scales]
+    return scales[numpy.argmin(appartenances)], min(appartenances)
 
 def test():
     test_scale = scale(scale.MAJOR_SCALE, 0)
