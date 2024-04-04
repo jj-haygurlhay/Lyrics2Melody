@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import DataLoader
 from models import MusicT5, MusicGPT2
 from datasets import load_dataset, load_metric
+from models.custom_transformer import CustomModelTransformer
 from training import Trainer as CustomTrainer
 import evaluate
 # from pytorch_lightning import Trainer as PLTrainer
@@ -23,7 +24,7 @@ from transformers import (
     T5EncoderModel,
     set_seed
 )
-from dataloader import SongsDataset, SongsCollator_v2
+from dataloader import SongsDataset, SongsCollator_v3
 from utils.quantize import encode_note, encode_duration, encode_gap, MIDI_NOTES, DURATIONS, GAPS
 import numpy as np
 import nltk
@@ -35,6 +36,7 @@ import torch.nn as nn
 HYPS_FILE = './config/hyps.yaml'
 EOS_token = -1
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#device = 'cpu'
 import time
 import math
 
@@ -69,20 +71,12 @@ def train_epoch(dataloader, model, encoder_optimizer,
             encoder_optimizer.zero_grad()
         decoder_optimizer.zero_grad()
 
-        decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _ = model(input_tensor, attn_mask, target_tensor)
 
-        loss_notes = criterion(
-            decoder_outputs_notes.view(-1, decoder_outputs_notes.size(-1)),
-            target_notes.view(-1)
-        )
-        loss_durations = criterion( 
-            decoder_outputs_durations.view(-1, decoder_outputs_durations.size(-1)),
-            target_durations.view(-1)
-        )
-        loss_gaps = criterion(
-            decoder_outputs_gaps.view(-1, decoder_outputs_gaps.size(-1)),
-            target_gaps.view(-1)
-        )
+        decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps = model(input_tensor, attn_mask, target_tensor[:, :-1, :])
+
+        loss_notes = criterion(decoder_outputs_notes.transpose(1, 2), target_notes[:, 1:])
+        loss_durations = criterion(decoder_outputs_durations.transpose(1, 2), target_durations[:, 1:])
+        loss_gaps = criterion(decoder_outputs_gaps.transpose(1, 2), target_gaps[:, 1:])
         loss = note_loss_weight * loss_notes + duration_loss_weight * loss_durations + gap_loss_weight * loss_gaps
 
         loss.backward()
@@ -107,7 +101,7 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
     else:
         encoder_optimizer = None
     decoder_optimizer = AdamW(model.decoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
-    criterion = nn.NLLLoss()
+    criterion = nn.CrossEntropyLoss()
 
     for epoch in range(1, n_epochs + 1):
         model.train()
@@ -135,21 +129,11 @@ def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss
             target_notes = data['labels']['notes'].to(device)
             target_durations = data['labels']['durations'].to(device)
             target_gaps = data['labels']['gaps'].to(device)
+            decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, logits_notes, logits_durations, logits_gaps = model.generate(input_tensor, attn_mask)
 
-            decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _ = model(input_tensor, attn_mask)
-
-            loss_notes = criterion(
-                decoder_outputs_notes.view(-1, decoder_outputs_notes.size(-1)),
-                target_notes.view(-1)
-            )
-            loss_durations = criterion( 
-                decoder_outputs_durations.view(-1, decoder_outputs_durations.size(-1)),
-                target_durations.view(-1)
-            )
-            loss_gaps = criterion(
-                decoder_outputs_gaps.view(-1, decoder_outputs_gaps.size(-1)),
-                target_gaps.view(-1)
-            )
+            loss_notes     = criterion(logits_notes.transpose(1, 2), target_notes)
+            loss_durations = criterion(logits_durations.transpose(1, 2), target_durations)
+            loss_gaps      = criterion(logits_gaps.transpose(1, 2), target_gaps)
             loss = note_loss_weight * loss_notes + duration_loss_weight * loss_durations + gap_loss_weight * loss_gaps
 
             total_loss += loss.item()
@@ -191,7 +175,13 @@ def main():
             param.requires_grad = False
         encoder.eval()
 
-    model = CustomModelRNN(encoder, device, SOS_token=0, MAX_LENGTH=config['data']['max_sequence_length'], train_encoder=train_encoder, dropout_p=config['model']['dropout'])
+    model = CustomModelTransformer(
+        encoder=encoder, 
+        device=device, 
+        SOS_token=0, 
+        MAX_LENGTH=config['data']['max_sequence_length'], 
+        train_encoder=train_encoder, 
+        dropout_p=config['model']['dropout'])
 
     # Create dataset and collator
     batch_size = config['training']['batch_size']
@@ -199,7 +189,7 @@ def main():
     train_dataset = SongsDataset(config['data']['data_dir'], split='train')
     valid_dataset = SongsDataset(config['data']['data_dir'], split='valid')
     test_dataset  = SongsDataset(config['data']['data_dir'], split='test')
-    collator = SongsCollator_v2(tokenizer=tokenizer, output_eos=config['data']['output_eos'], max_length=config['data']['max_sequence_length'], use_syllables=config['data']['use_syllables'])
+    collator = SongsCollator_v3(tokenizer=tokenizer, output_eos=config['data']['output_eos'], max_length=config['data']['max_sequence_length'], use_syllables=config['data']['use_syllables'])
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collator, pin_memory=True, num_workers=0)
     val_loader   = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator, pin_memory=True, num_workers=0)
@@ -217,6 +207,8 @@ def main():
         duration_loss_weight=config['training']['duration_loss_weight'],
         gap_loss_weight=config['training']['gap_loss_weight']
         )
+    
+    # Save model
     torch.save(model.state_dict(), 'model.pth')
 
 if __name__ == "__main__":

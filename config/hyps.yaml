@@ -3,14 +3,14 @@ model:
   dropout: 0.2
 
 training:
-  batch_size: 64
-  epochs: 2
-  lr: 1e-5
+  batch_size: 300
+  epochs: 4
+  lr: 5e-5
   weight_decay: 0.01
-  train_encoder: True
-  note_loss_weight: 0.4
-  duration_loss_weight: 0.2
-  gap_loss_weight: 0.1
+  train_encoder: False
+  note_loss_weight: 0.8
+  duration_loss_weight: 0.5
+  gap_loss_weight: 0.5
 
 
 data:

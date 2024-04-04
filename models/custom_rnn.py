@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
 
-class CustomModel(BaseModel):
+class CustomModelRNN(BaseModel):
 
     def __init__(self, encoder, device, SOS_token=0, MAX_LENGTH=100, dropout_p=0.1, train_encoder=False):
         super().__init__()
