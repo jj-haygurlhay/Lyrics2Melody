@@ -6,6 +6,7 @@ from transformers import (
     T5EncoderModel,
 )
 from models.custom_rnn import CustomModelRNN
+from models.custom_transformer import CustomModelTransformer
 from utils.quantize import decode_note, decode_duration, decode_gap
 import torch 
 
@@ -25,24 +26,18 @@ encoder.eval()
 
 max_length = 200
 
-model = CustomModelRNN(encoder, device, SOS_token=0, MAX_LENGTH=max_length)
+model = CustomModelTransformer(encoder, device, SOS_token=0, MAX_LENGTH=max_length)
 model.load_state_dict(torch.load(model_path))
 model.to(device)
 
 text = 'People get ready a train a you need no baggage you just get on board you need is faith to hear the diesels need no ticket you just thank the Lord so people get ready coast the doors and board hope for among those loved the most there no room for the hopeless sinner who would hurt mankind believe me now have pity on grow thinner for no hiding place against the throne so people get ready a train a you need no baggage you just get on board you need is faith to hear the diesels'
 inputs = tokenizer(text, truncation=True, max_length=max_length, return_tensors='pt').to(device)
 
-decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _ = model(inputs['input_ids'], inputs['attention_mask'])
+decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _, _ = model.generate(inputs['input_ids'], inputs['attention_mask'])
 
-decoded_output_notes = torch.argmax(decoder_outputs_notes, dim=-1)[0]
-decoded_output_durations = torch.argmax(decoder_outputs_durations, dim=-1)[0]
-decoded_output_gaps = torch.argmax(decoder_outputs_gaps, dim=-1)[0]
 def decode_midi_sequence(decoded_output_notes, decoded_output_durations, decoded_output_gaps):
     sequence = []
-    for note, duration, gap in zip(decoded_output_notes, decoded_output_durations, decoded_output_gaps):
-        note = note.item()
-        duration = duration.item()
-        gap = gap.item()
+    for note, duration, gap in zip(decoded_output_notes[0], decoded_output_durations[0], decoded_output_gaps[0]):
         if note == 1 or duration == 1 or gap == 1: # EOS token
             break
         if note == 0 or duration == 0 or gap == 0: # SOS token
@@ -50,7 +45,7 @@ def decode_midi_sequence(decoded_output_notes, decoded_output_durations, decoded
         sequence.append([decode_note(note-2), decode_duration(duration-2), decode_gap(gap-2)])
     return sequence
 
-midi_sequence = decode_midi_sequence(decoded_output_notes, decoded_output_durations, decoded_output_gaps)
+midi_sequence = decode_midi_sequence(decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps)
 print(midi_sequence)
 print('Inputs length:', len(inputs['input_ids'][0]))
 print('Outputs length:', len(midi_sequence))
