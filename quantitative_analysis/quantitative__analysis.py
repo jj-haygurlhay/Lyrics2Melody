@@ -13,6 +13,7 @@ from utils.ngram import ngram_repetition, count_ngrams
 from utils.BLEUscore import bleu_score
 from dataloader.dataset import SongsDataset
 import json
+from utils.scale import scale
 # from inference import decode_midi_sequence
 
 def decode_midi_sequence(decoded_output):
@@ -50,8 +51,9 @@ class quantitative_analysis:
         if model_type == "seq2seq":
             self.model = AutoModelForSeq2SeqLM.from_pretrained(model_path).to('cuda')
             self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self.ref = reference(dataset_path)
 
-    def generate_midi(self, midi_per_lyrics, number_of_lyrics):
+    def generate_midi(self, number_of_lyrics, midi_per_lyrics=1):
         self.midi_per_lyrics = midi_per_lyrics
         self.number_of_lyrics = number_of_lyrics
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -68,50 +70,149 @@ class quantitative_analysis:
         for (decoded_seq, lyrics) in zip(decoded_outputs, lyrics_ref):
             self.generated_midi[lyrics] += [decode_midi_sequence(decoded_seq)]
 
-    def analyse(self, midi_per_lyrics, number_of_lyrics):
-        assert midi_per_lyrics <= self.midi_per_lyrics, 'Must analyse <= than computed'
-        assert number_of_lyrics <= self.number_of_lyrics, 'Must analyse <= than computed'
+    def analyse(self):
+        lyrics_set = self.generated_midi.keys()
+        max_len = 512 #???
 
-        analysis = lambda:0
-        analysis.midi_per_lyrics = midi_per_lyrics
-        analysis.number_of_lyrics = number_of_lyrics
-        analysis.lyrics_set = self.dataset.lyrics[0:number_of_lyrics]
+        self.analysis = [None]*max_len
+        self.average = [None]*max_len
+        for leng, dicto in enumerate(self.analysis):
+            self.analysis[leng] = dict()
+            self.average[leng] = dict()
+            span_temp = []
+            rep2_temp = []
+            rep3_temp = []
+            rep4_temp = []
+            unique_temp = []
+            restless_temp = []
+            avg_rest_temp = []
+            song_len_temp = []
+            bleu2_temp = []
+            bleu3_temp=[]
+            bleu4_temp = []
+            for id_lyrics, lyrics in enumerate(lyrics_set):
+                self.analysis[leng][lyrics] = dict()
+                span_song = []
+                rep2_song = []
+                rep3_song = []
+                rep4_song = []
+                unique_song = []
+                restless_song = []
+                avg_rest_song = []
+                song_len_song = []
+                for midi_set in self.generated_midi[lyrics]:
+                    if len(midi_set) > leng:
+                        song_notes = [midi[0] for midi in midi_set[:leng+1]]
+                        song_durations = [midi[1] for midi in midi_set[:leng+1]]
+                        song_gaps = [midi[2] for midi in midi_set[:leng+1]]
+                        span_song += [max(song_notes) - min(song_notes)]
+                        rep2_song += [ngram_repetition(song_notes, 2)]
+                        rep3_song += [ngram_repetition(song_notes, 3)]
+                        rep4_song += [ngram_repetition(song_notes, 4)]
+                        unique_song += [len(count_ngrams(song_notes, 1).keys())]
+                        restless_song += [count_ngrams(song_gaps,1)[(0.0,)]]
+                        avg_rest_song += [np.average(song_gaps)]
+                        song_len_song += [sum(song_gaps) +sum( song_durations)]
+                self.analysis[leng][lyrics]["span"] = np.average(span_song)
+                span_temp += [self.analysis[leng][lyrics]["span"]]
+                self.analysis[leng][lyrics]["rep2"] = np.average(rep2_song)
+                rep2_temp += [self.analysis[leng][lyrics]["rep2"]]
+                self.analysis[leng][lyrics]["rep3"] = np.average(rep3_song)
+                rep3_temp += [self.analysis[leng][lyrics]["rep3"]]
+                self.analysis[leng][lyrics]["rep4"] = np.average(rep4_song)
+                rep4_temp += [self.analysis[leng][lyrics]["rep4"]]
+                self.analysis[leng][lyrics]["unique"] = np.average(unique_song)
+                unique_temp += [self.analysis[leng][lyrics]["unique"]]
+                self.analysis[leng][lyrics]["restless"] = np.average(restless_song)
+                restless_temp += [self.analysis[leng][lyrics]["restless"]]
+                self.analysis[leng][lyrics]["avg_rest"] = np.average(avg_rest_song)
+                avg_rest_temp += [self.analysis[leng][lyrics]["avg_rest"]]
+                self.analysis[leng][lyrics]["song_len"] = np.average(song_len_song)
+                song_len_temp += [self.analysis[leng][lyrics]["song_len"]]
+                reference_song_midi = self.ref.midi_set[self.ref.lyrics_set.index(lyrics)]
+                reference_song_notes = [midi[0] for midi in reference_song_midi]
+                reference_song_notes = [[reference_song_notes]]*len(self.generated_midi[lyrics])
+                #TODO? BLEU score does not use the leng 
+                generated_notes=[[midi[0] for midi in midis] for midis in self.generated_midi[lyrics]]
+                self.analysis[leng][lyrics]["bleu2"] = bleu_score(generated_notes, reference_song_notes, max_n=2, weights=[1/2]*2)
+                bleu2_temp += [self.analysis[leng][lyrics]["bleu2"]]
+                self.analysis[leng][lyrics]["bleu3"] = bleu_score(generated_notes, reference_song_notes, max_n=3, weights=[1/3]*3)
+                bleu3_temp += [self.analysis[leng][lyrics]["bleu3"]]
+                self.analysis[leng][lyrics]["bleu4"] = bleu_score(generated_notes, reference_song_notes, max_n=4, weights=[1/4]*4)
+                bleu4_temp += [self.analysis[leng][lyrics]["bleu4"]]
 
-        analysis.span = dict.fromkeys(analysis.lyrics_set)
-        analysis.rep2 = dict.fromkeys(analysis.lyrics_set)
-        analysis.rep3 = dict.fromkeys(analysis.lyrics_set)
-        analysis.rep4 = dict.fromkeys(analysis.lyrics_set)
-        analysis.unique = dict.fromkeys(analysis.lyrics_set)
-        analysis.restless = dict.fromkeys(analysis.lyrics_set)
-        analysis.avg_rest = dict.fromkeys(analysis.lyrics_set)
-        analysis.song_len = dict.fromkeys(analysis.lyrics_set)
-        analysis.bleu2_notes = dict.fromkeys(analysis.lyrics_set)
-        analysis.bleu3_notes = dict.fromkeys(analysis.lyrics_set)
-        analysis.bleu4_notes = dict.fromkeys(analysis.lyrics_set)
-        for lyrics in analysis.lyrics_set:
-            notes = [[self.generated_midi[lyrics][j][i][0] for i in range(len(self.generated_midi[lyrics][j]))]for j in range(midi_per_lyrics)]
-            durations = [[self.generated_midi[lyrics][j][i][1] for i in range(len(self.generated_midi[lyrics][j]))]for j in range(midi_per_lyrics)]
-            gaps = [[self.generated_midi[lyrics][j][i][2] for i in range(len(self.generated_midi[lyrics][j]))]for j in range(midi_per_lyrics)]
-            analysis.span[lyrics] = np.average([max(notes[i])-min(notes[i]) for i in range(len(notes))])
-            analysis.rep2[lyrics] = np.average([ngram_repetition(notes[i],2) for i in range(len(notes))])
-            analysis.rep3[lyrics] = np.average([ngram_repetition(notes[i],3) for i in range(len(notes))])
-            analysis.rep4[lyrics] = np.average([ngram_repetition(notes[i],4) for i in range(len(notes))])
-            analysis.unique[lyrics] = np.average([len(count_ngrams(notes[i], 1).keys()) for i in range(len(notes))])
-            analysis.restless[lyrics] = np.average([count_ngrams(gaps[i],1)[(0.0,)]for i in range(len(gaps))])
-            analysis.avg_rest[lyrics] = np.average([np.average(gaps[i])for i in range(len(gaps))])
-            analysis.song_len[lyrics] = np.average([sum(gaps[i])+sum(durations[i]) for i in range(len(gaps))])
-            ind = list(self.dataset.lyrics).index(lyrics)
-            reference = json.loads(self.dataset.midi_notes[ind])
-            analysis.bleu2_notes[lyrics] = bleu_score(notes, [reference]*len(notes), max_n=2, weights=[1/2]*2)
-            analysis.bleu3_notes[lyrics] = bleu_score(notes, [reference]*len(notes), max_n=3, weights=[1/3]*3)
-            analysis.bleu4_notes[lyrics] = bleu_score(notes, [reference]*len(notes), max_n=4, weights=[1/4]*4)
-        
-        return analysis
+            self.average[leng]["span"] = np.average(span_temp)
+            self.average[leng]["rep2"] = np.average(rep2_temp)
+            self.average[leng]["rep3"] = np.average(rep3_temp)
+            self.average[leng]["rep4"] = np.average(rep4_temp)
+            self.average[leng]["unique"] = np.average(unique_temp)
+            self.average[leng]["restless"] = np.average(restless_temp)
+            self.average[leng]["avg_rest"] = np.average(avg_rest_temp)
+            self.average[leng]["song_len"] = np.average(song_len_temp)
+            self.average[leng]["bleu2"] = np.average(bleu2_temp)
+            self.average[leng]["bleu3"] = np.average(bleu3_temp)
+            self.average[leng]["bleu4"] = np.average(bleu4_temp)
+            
+class reference:
+    def __init__(self, dataset_path) -> None:
+        self.dataset = pd.read_csv(dataset_path)
+        self.lyrics_set = list(self.dataset.lyrics)
+        self.midi_set = [json.loads(midi) for midi in self.dataset.midi_notes] #Array(Array(triplets))
+        max_len = max([len(midi) for midi in self.midi_set])
 
+        self.reference = [None]*max_len
+        self.average = [None]*max_len
+        for leng, dicto in enumerate(self.reference):
+            self.reference[leng] = dict()
+            self.average[leng] = dict()
+            span_temp = []
+            rep2_temp = []
+            rep3_temp = []
+            rep4_temp = []
+            unique_temp = []
+            restless_temp = []
+            avg_rest_temp = []
+            song_len_temp = []
+            for id_lyrics, lyrics in enumerate(self.lyrics_set):
+                if len(self.midi_set[id_lyrics]) > leng:
+                    self.reference[leng][lyrics] = dict()
+                    song_ref = self.reference[leng][lyrics]
+                    song_notes = [midi[0] for midi in self.midi_set[id_lyrics][0:leng+1]]
+                    song_durations = [midi[1] for midi in self.midi_set[id_lyrics][0:leng+1]]
+                    song_gaps = [midi[2] for midi in self.midi_set[id_lyrics][0:leng+1]]
+                    song_ref["span"] = max(song_notes) - min(song_notes)
+                    span_temp += [song_ref["span"]]
+                    song_ref["rep2"] = ngram_repetition(song_notes, 2)
+                    rep2_temp += [song_ref["rep2"]]
+                    song_ref["rep3"] = ngram_repetition(song_notes, 3)
+                    rep3_temp += [song_ref["rep3"]]
+                    song_ref["rep4"] = ngram_repetition(song_notes, 4)
+                    rep4_temp += [song_ref["rep4"]]
+                    song_ref["unique"] = len(count_ngrams(song_notes, 1).keys())
+                    unique_temp += [song_ref["unique"]]
+                    song_ref["restless"] = count_ngrams(song_gaps,1)[(0.0,)]
+                    restless_temp += [song_ref["restless"]]
+                    song_ref["avg_rest"] = np.average(song_gaps)
+                    avg_rest_temp += [song_ref["avg_rest"]]
+                    song_ref["song_len"] = sum(song_gaps) +sum( song_durations)
+                    song_len_temp += [song_ref["song_len"]]
 
-    
+            self.average[leng]["span"] = np.average(span_temp)
+            self.average[leng]["rep2"] = np.average(rep2_temp)
+            self.average[leng]["rep3"] = np.average(rep3_temp)
+            self.average[leng]["rep4"] = np.average(rep4_temp)
+            self.average[leng]["unique"] = np.average(unique_temp)
+            self.average[leng]["restless"] = np.average(restless_temp)
+            self.average[leng]["avg_rest"] = np.average(avg_rest_temp)
+            self.average[leng]["song_len"] = np.average(song_len_temp)
 
+def test():
+    analyser = quantitative_analysis("../runs/1-Avril-Rapport", "seq2seq", "../data/new_dataset/test.csv")
+    analyser.generate_midi(4,4)
+    print(analyser.ref.average[20])
+    analyser.analyse()
+    print(analyser.average[20])
 
-
-
+if __name__ == "__main__":
+    test()
 
