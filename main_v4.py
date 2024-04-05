@@ -57,6 +57,7 @@ def train_epoch(dataloader, model, encoder_optimizer,
 
     total_loss = 0
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}")
+    print_data = True
 
     for data in progress_bar:
         input_tensor = data['input_ids'].to(device)
@@ -79,6 +80,18 @@ def train_epoch(dataloader, model, encoder_optimizer,
         loss_gaps = criterion(decoder_outputs_gaps.transpose(1, 2), target_gaps[:, 1:])
         loss = note_loss_weight * loss_notes + duration_loss_weight * loss_durations + gap_loss_weight * loss_gaps
 
+        if print_data:
+            print_data = False
+            # Compute notes
+            notes = torch.argmax(decoder_outputs_notes[0], dim=-1).cpu().numpy()
+            durations = torch.argmax(decoder_outputs_durations[0], dim=-1).cpu().numpy()
+            gaps = torch.argmax(decoder_outputs_gaps[0], dim=-1).cpu().numpy()
+            print('Notes:', notes[:20])
+            print('Target Notes', target_notes[0, 1:21].cpu().numpy())
+            print('\nDurations:', durations[:20])
+            print('Target Durations', target_durations[0, 1:21].cpu().numpy())
+            print('\nGaps:', gaps[:20])
+            print('Target Gaps', target_gaps[0, 1:21].cpu().numpy())
         loss.backward()
 
         if encoder_optimizer is not None:
@@ -122,7 +135,7 @@ def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss
     with torch.no_grad():
         total_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Validation: ")
-
+        print_data = True
         for data in progress_bar:
             input_tensor = data['input_ids'].to(device)
             attn_mask = data['attention_mask'].to(device)
@@ -131,10 +144,19 @@ def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss
             target_gaps = data['labels']['gaps'].to(device)
             decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, logits_notes, logits_durations, logits_gaps = model.generate(input_tensor, attn_mask)
 
-            loss_notes     = criterion(logits_notes.transpose(1, 2), target_notes)
-            loss_durations = criterion(logits_durations.transpose(1, 2), target_durations)
-            loss_gaps      = criterion(logits_gaps.transpose(1, 2), target_gaps)
+            loss_notes     = criterion(logits_notes.transpose(1, 2), target_notes[:, 1:])
+            loss_durations = criterion(logits_durations.transpose(1, 2), target_durations[:, 1:])
+            loss_gaps      = criterion(logits_gaps.transpose(1, 2), target_gaps[:, 1:])
             loss = note_loss_weight * loss_notes + duration_loss_weight * loss_durations + gap_loss_weight * loss_gaps
+
+            if print_data:
+                print_data = False
+                print('Notes:', decoder_outputs_notes[0][:20].cpu().numpy())
+                print('Target Notes:', target_notes[0][1:20].cpu().numpy())
+                print('\nDurations:', decoder_outputs_durations[0][:20].cpu().numpy())
+                print('Target Durations:', target_durations[0][1:21].cpu().numpy())
+                print('\nGaps:', decoder_outputs_gaps[0][:20].cpu().numpy())
+                print('Target Gaps:', target_gaps[0][1:21].cpu().numpy())
 
             total_loss += loss.item()
             progress_bar.set_postfix({'Validation Loss': total_loss / len(dataloader)})
@@ -181,7 +203,15 @@ def main():
         SOS_token=0, 
         MAX_LENGTH=config['data']['max_sequence_length'], 
         train_encoder=train_encoder, 
-        dropout_p=config['model']['dropout'])
+        dropout_p=config['model']['dropout'],
+        expansion_factor=config['model']['expansion_factor'],
+        num_heads=config['model']['num_heads'],
+        num_layers=config['model']['num_layers']
+        )
+    
+    for p in model.decoder.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
 
     # Create dataset and collator
     batch_size = config['training']['batch_size']
