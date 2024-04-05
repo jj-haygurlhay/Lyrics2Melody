@@ -137,9 +137,9 @@ class SongsCollator_v3:
             durations.append(self.output_eos)
             gaps.append(self.output_eos)
             if len(notes) < self.max_length:
-                notes += [0] * (self.max_length - len(notes) )
-                durations += [0] * (self.max_length - len(durations) )
-                gaps += [0] * (self.max_length - len(gaps))
+                notes += [self.output_eos] * (self.max_length - len(notes) )
+                durations += [self.output_eos] * (self.max_length - len(durations) )
+                gaps += [self.output_eos] * (self.max_length - len(gaps))
             all_notes.append(notes)
             all_durations.append(durations)
             all_gaps.append(gaps)

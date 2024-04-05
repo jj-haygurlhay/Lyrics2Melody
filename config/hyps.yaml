@@ -1,16 +1,19 @@
 model:
-  model_name: 't5'
-  dropout: 0.2
+  model_name: 't5-small'
+  dropout: 0.1
+  expansion_factor: 1
+  num_layers: 1
+  num_heads: 8
 
 training:
-  batch_size: 300
-  epochs: 4
-  lr: 5e-5
-  weight_decay: 0.01
+  batch_size: 128
+  epochs: 2
+  lr: 1e-5
+  weight_decay: 0
   train_encoder: False
-  note_loss_weight: 0.8
-  duration_loss_weight: 0.5
-  gap_loss_weight: 0.5
+  note_loss_weight: 0.2
+  duration_loss_weight: 0.1
+  gap_loss_weight: 0.1
 
 
 data:

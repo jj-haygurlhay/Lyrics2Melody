@@ -8,7 +8,7 @@ from utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
 class CustomModelTransformer(BaseModel):
 
-    def __init__(self, encoder, device, SOS_token=0, MAX_LENGTH=100, dropout_p=0.1, train_encoder=False):
+    def __init__(self, encoder, device, SOS_token=0, MAX_LENGTH=100, dropout_p=0.1, train_encoder=False, expansion_factor=4, num_heads=8, num_layers=2):
         super().__init__()
         self.device = device
         self.MAX_LENGTH = MAX_LENGTH
@@ -24,7 +24,10 @@ class CustomModelTransformer(BaseModel):
             output_size_gap=len(GAPS)+2,
             MAX_LENGTH=MAX_LENGTH,
             dropout_p=dropout_p,
-            device=device
+            device=device,
+            num_layers=num_layers,
+            expansion_factor=expansion_factor,
+            n_heads=num_heads
         )
         self.train_encoder = train_encoder
 
@@ -61,7 +64,7 @@ class CustomModelTransformer(BaseModel):
 
         out_notes, out_durations, out_gaps = [], [], []
         logits_notes, logits_durations, logits_gaps = [], [], []
-        for _ in range(self.MAX_LENGTH):
+        for _ in range(self.MAX_LENGTH-1): # -1 to account for the SOS token
             note, duration, gap = self.decoder(target, encoder_output[0], target_mask)
 
             logits_notes.append(note)
@@ -99,9 +102,9 @@ class CustomTransformerDecoder(nn.Module):
         self.MAX_LENGTH = MAX_LENGTH
         self.dropout_p = dropout_p
 
-        self.note_embedding = nn.Embedding(output_size_note, hidden_size)
-        self.duration_embedding = nn.Embedding(output_size_duration, hidden_size)
-        self.gap_embedding = nn.Embedding(output_size_gap, hidden_size)
+        self.note_embedding = nn.Embedding(output_size_note, int(hidden_size/2))
+        self.duration_embedding = nn.Embedding(output_size_duration, int(hidden_size/4))
+        self.gap_embedding = nn.Embedding(output_size_gap, int(hidden_size/4))
         self.position_embedding = PositionalEmbedding(MAX_LENGTH, hidden_size)
         self.dropout = nn.Dropout(dropout_p)
 
@@ -128,7 +131,7 @@ class CustomTransformerDecoder(nn.Module):
         duration = self.duration_embedding(duration)
         gap      = self.gap_embedding(gap)
 
-        x = note + duration + gap # TODO maybe change this
+        x = torch.cat([note, duration, gap], dim=-1)
         x = self.position_embedding(x)
         x = self.dropout(x)
 
