@@ -1,7 +1,7 @@
 import math
 import torch
 
-from ngram import _compute_ngram_counter
+from .ngram import _compute_ngram_counter
 def bleu_score(candidate_corpus, references_corpus, max_n=4, weights=[0.25] * 4):
     """MODIFIED VERSION OF torchtext.data.metrics
 
@@ -78,5 +78,11 @@ def test():
     pred = [[(1,1),(2,2),(3,3),(4,4),(1,1),(5,5)]]
     targets = [[[(7,7),(3,3),(6,6),(2,2),(4,4),(1,1),(5,5)],[(6,6),(2,2),(3,3),(4,4),(1,1),(5,5)]]]
     assert bleu_score(pred,targets) == 0.7598356604576111
+    pred = [[1,2,3,4,1,5]]
+    targets = [[[7, 3,6,2,4,1,5],[6,2,3,4,1,5]]]
+    assert bleu_score(pred,targets) == 0.7598356604576111
+    pred = [[1,2,3,4,1,5],[1,2,3,4,1,5]]
+    targets = [[[7, 3,6,2,4,1,5],[6,2,3,4,1,5]],[[7, 3,6,2,4,1,5],[6,2,3,4,1,5]]]
+    print(bleu_score(pred, targets))
 if __name__ == "__main__":
     test()
