@@ -37,13 +37,7 @@ def serialize_melody(midi_seq):
     """
     serialized_seq = []
     for note, duration, gap in midi_seq:
-        note_token = f"<note{encode_note(note)}>"
-        duration_token = f"<duration{encode_duration(duration)}>"
-        gap_token = f"<gap{encode_gap(gap)}>"
-        serialized_seq.append(f"{note_token} {duration_token} {gap_token}")
-        # serialized_seq.append(encode_note(note))
-        # serialized_seq.append(encode_duration(duration))
-        # serialized_seq.append(encode_gap(gap))
+        serialized_seq.append(f"<note{encode_note(note)}_duration{encode_duration(duration)}_gap{encode_gap(gap)}>")
     return " ".join(serialized_seq)
     #return serialized_seq
 
@@ -65,23 +59,34 @@ def main():
     model = T5ForConditionalGeneration.from_pretrained(model_name)
     model.generation_config = gen_config
     tokenizer = T5Tokenizer.from_pretrained(model_name, legacy=False)
-    tokenizer.add_tokens([f'<note{i}>' for i in range(len(MIDI_NOTES))])
-    tokenizer.add_tokens([f'<duration{i}>' for i in range(len(DURATIONS))])
-    tokenizer.add_tokens([f'<gap{i}>' for i in range(len(GAPS))])
+    # Add tokens for note, duration, and gap
+    new_tokens = []
+    for i in range(len(MIDI_NOTES)):
+        for j in range(len(DURATIONS)):
+            for k in range(len(GAPS)):
+                new_tokens.append(f'<note{i}_duration{j}_gap{k}>')
+    tokenizer.add_tokens(new_tokens)
+
+    # tokenizer.add_tokens([f'<note{i}>' for i in range(len(MIDI_NOTES))])
+    # tokenizer.add_tokens([f'<duration{i}>' for i in range(len(DURATIONS))])
+    # tokenizer.add_tokens([f'<gap{i}>' for i in range(len(GAPS))])
     model.resize_token_embeddings(len(tokenizer))
     model.to(device)
 
-    # Create dataset and collator
+    # Load hyps
     batch_size = config['training']['batch_size']
+    learning_rate = float(config['training']['lr'])
+    epochs = config['training']['epochs']
+    weight_decay = float(config['training']['weight_decay'])
 
     #train_dataset = SongsDataset(config['data']['data_dir'], split='train')
-    dataset = load_dataset('csv', data_files={'train': 'data/new_dataset/train.csv', 'valid': 'data/new_dataset/valid.csv', 'test': 'data/new_dataset/test.csv'})
+    dataset = load_dataset('csv', data_files={'train': 'data/new_dataset_length20/train_length20.csv', 'valid': 'data/new_dataset_length20/valid_length20.csv', 'test': 'data/new_dataset_length20/test_length20.csv'})
 
     def preprocess_function(examples):
         
-        inputs = ['notes: ' + lyrics for lyrics in examples['lyrics']]
+        inputs = ['notes: ' + lyrics for lyrics in examples['syl_lyrics']]
         targets = examples['midi_notes']
-        results = tokenizer(inputs, truncation=True, max_length=config['data']['max_sequence_length'])
+        results = tokenizer(inputs, truncation=True, max_length=config['data']['max_sequence_length']+20)
         target_texts = []
 
         for item in targets:
@@ -107,23 +112,23 @@ def main():
         optim='adafactor', # 'adam' or 'adafactor
         evaluation_strategy="epoch",
         logging_strategy="steps",
-        logging_steps=200,
+        logging_steps=20,
         save_strategy="epoch",
-        learning_rate=2e-5,
+        learning_rate=learning_rate,
         warmup_steps=0,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-        weight_decay=0.01,
+        weight_decay=weight_decay,
         save_total_limit=3,
-        num_train_epochs=4,
+        num_train_epochs=epochs,
         predict_with_generate=True,
         fp16=True,
         load_best_model_at_end=True,
-        metric_for_best_model="rouge1",
+        metric_for_best_model="bleu",
         report_to="tensorboard",
     )
 
-    metric = evaluate.load('rouge')
+    metric = evaluate.load('bleu')
 
     def compute_metrics(eval_pred):
         predictions, labels = eval_pred
@@ -132,23 +137,16 @@ def main():
         # Replace -100 in the labels as we can't decode them.
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-        
-        # Rouge expects a newline after each sentence
-        decoded_preds = ["\n".join(nltk.sent_tokenize(pred.strip()))
-                        for pred in decoded_preds]
-        decoded_labels = ["\n".join(nltk.sent_tokenize(label.strip())) 
-                        for label in decoded_labels]
-        
-        # Compute ROUGE scores
-        result = metric.compute(predictions=decoded_preds, references=decoded_labels,
-                                use_stemmer=True)
+                
+        # Compute BLEU scores
+        result = metric.compute(predictions=decoded_preds, references=decoded_labels)
         
         # Add mean generated length to metrics
         prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id)
                         for pred in predictions]
         result["gen_len"] = np.mean(prediction_lens)
         
-        return {k: round(v, 4) for k, v in result.items()}
+        return result
 
     custom_trainer = Seq2SeqTrainer(
         model=model,
