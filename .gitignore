@@ -163,3 +163,4 @@ cython_debug/
 .lightning_studio/
 .vscode/
 /runs
+.fluidsynth

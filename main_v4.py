@@ -113,7 +113,7 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
         encoder_optimizer = AdamW(model.encoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
     else:
         encoder_optimizer = None
-    decoder_optimizer = AdamW(model.decoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
+    decoder_optimizer = AdamW(list(model.note_decoder.parameters()) + list(model.duration_decoder.parameters()) + list(model.gap_decoder.parameters()), lr=float(learning_rate), weight_decay=weight_decay)
     criterion = nn.CrossEntropyLoss()
 
     for epoch in range(1, n_epochs + 1):
@@ -209,7 +209,13 @@ def main():
         num_layers=config['model']['num_layers']
         )
     
-    for p in model.decoder.parameters():
+    for p in model.note_decoder.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+    for p in model.duration_decoder.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+    for p in model.gap_decoder.parameters():
         if p.dim() > 1:
             nn.init.xavier_uniform_(p)
 

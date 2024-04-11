@@ -13,7 +13,7 @@ from midi2audio import FluidSynth
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-model_path = './runs/2024-04-10_13-10-47'
+model_path = './runs/2024-04-10_13-51-53/checkpoint-1600'
 
 model = T5ForConditionalGeneration.from_pretrained(model_path).to('cuda')
 tokenizer = T5Tokenizer.from_pretrained(model_path)
@@ -29,19 +29,19 @@ inputs = ['notes: ' + text]
 inputs = tokenizer(inputs, truncation=True, max_length=max_length*2, return_tensors='pt').to(device)
 output = model.generate(
     **inputs, 
-    num_beams=2, 
+    num_beams=4, 
     min_length=10, 
     max_length=max_length, 
     do_sample=True, 
-    temperature=1.5, 
+    temperature=1.0, 
     repetition_penalty=1.0,
-    top_k=50, 
+    # top_k=50, 
     #top_p=0.98, 
     eos_token_id=tokenizer.eos_token_id, 
     pad_token_id=tokenizer.pad_token_id,
     #early_stopping=True,
     num_return_sequences=1,
-    #bad_words_ids=[[42612]]
+    bad_words_ids=[[42612]]
     )
 
 decoded_output = tokenizer.batch_decode(output, skip_special_tokens=True)[0]
