@@ -1,11 +1,5 @@
+import os
 import re
-from time import sleep
-from transformers import (
-    AutoModelForSeq2SeqLM,
-    T5ForConditionalGeneration,
-    AutoTokenizer,
-    T5Tokenizer,
-)
 import yaml
 from dataloader.vocab import Lang
 from models.custom_rnn import CustomModelRNN
@@ -15,7 +9,11 @@ from inference.generate_midi import GenerateMidi
 from midi2audio import FluidSynth
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-HYPS_FILE = './config/hyps.yaml'
+
+model_dir = './runs/RNN/2024-04-11_16-18-26/' # Change this to the path of the model you want to use
+
+model_path = os.path.join(model_dir, 'model.pt')
+config_path = os.path.join(model_dir, 'config.yaml')
 
 def serialize_lyrics(lyrics, max_length, syllables_lang, eos_token):
     lyrics_tokens = []
@@ -26,10 +24,8 @@ def serialize_lyrics(lyrics, max_length, syllables_lang, eos_token):
     lyrics_tokens.append(eos_token)
     return lyrics_tokens
 
-with open(HYPS_FILE, "r") as f:
+with open(config_path, "r") as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
-
-model_path = './model.pth'
 
 # Create language objects
 syllables = Lang('syllables')
@@ -43,17 +39,16 @@ model = CustomModelRNN(
     SOS_token=0, 
     MAX_LENGTH=config['data']['max_sequence_length'], 
     dropout_p=config['model']['dropout'],
+    num_layers=config['model']['num_layers'],
     device=device, 
-)
+    )
 model.load_state_dict(torch.load(model_path))
 model.to(device)
 
 
 max_length = config['data']['max_sequence_length']
 
-# text = 'People get ready a train a you need no baggage you just get on board you need is faith to hear the diesels need no ticket you just thank the Lord so people get ready coast the doors and board hope for among those loved the most there no room for the hopeless sinner who would hurt mankind believe me now have pity on grow thinner for no hiding place against the throne so people get ready a train a you need no baggage you just get on board you need is faith to hear the diesels'
-# text = 'Peo ple get rea dy a train a you need no bag gage you just get on board you need is faith to hear the die sels need no tic ket you just thank the Lord so peo ple get rea dy coast the doors and board hope for among those loved the most there no room for the hope less sin ner who would hurt man kind be lieve me now have pi ty on grow thin ner for no hi ding place against the throne so peo ple get rea dy a train a you need no bag gage you just get on board you need is faith to hear the die sels'
-text = 'Peo ple get rea dy a train a you need no bag gage you just get on board you need'
+text = 'Peo ple get rea dy a train a you need no bag gage you just get on board you need is faith to hear the die sels need no tic ket you just thank the Lord so peo ple get rea dy coast the doors and board hope for among those loved the most there no room for the hope less sin ner who would hurt man kind be lieve me now have pi ty on grow thin ner for no hi ding place against the throne so peo ple get rea dy a train a you need no bag gage you just get on board you need is faith to hear the die sels'
 inputs = [serialize_lyrics(text, max_length, syllables, 1)]
 input_tensor = torch.tensor(inputs).to(device)
 
@@ -79,18 +74,19 @@ def decode_midi_sequence(decoder_outputs_notes, decoder_outputs_durations, decod
     return sequence
 
 midi_sequence = decode_midi_sequence(decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps)
-print(midi_sequence)
+print('MIDI sequence', midi_sequence)
 print('Input Sequence length: ', len(inputs[0]))
 print('Output Sequence length: ', len(midi_sequence))
 
 # Generate MIDI file
 midi = GenerateMidi()
-fs = FluidSynth(sound_font='./.fluidsynth/default_sound_font.sf2')
-
 midi_output = midi.create_midi_pattern_from_discretized_data(midi_sequence)
-destination_midi = "./test.mid"
-destination_wav = "./test.wav"
+destination_midi = os.path.join(model_dir, "test.mid")
 midi_output.write(destination_midi)
-fs.midi_to_audio(destination_midi, destination_wav)
 
-
+try:
+    destination_wav = os.path.join(model_dir, "test.wav")
+    fs = FluidSynth(sound_font='./.fluidsynth/default_sound_font.sf2')
+    fs.midi_to_audio(destination_midi, destination_wav)
+except:
+    print("Error converting midi to wav, missing sound font file. Please install fluidsynth and download a sound font file.")

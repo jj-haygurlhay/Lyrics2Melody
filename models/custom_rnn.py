@@ -8,7 +8,7 @@ from utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
 class CustomModelRNN(BaseModel):
 
-    def __init__(self, input_size, hidden_size, device, SOS_token=0, MAX_LENGTH=100, dropout_p=0.1):
+    def __init__(self, input_size, hidden_size, num_layers, device, SOS_token=0, MAX_LENGTH=100, dropout_p=0.1):
         super().__init__()
         self.device = device
 
@@ -16,6 +16,7 @@ class CustomModelRNN(BaseModel):
         self.encoder = EncoderRNN(
             input_size, 
             hidden_size, 
+            num_layers,
             dropout_p=dropout_p
             )
 
@@ -25,6 +26,7 @@ class CustomModelRNN(BaseModel):
             output_size_note=len(MIDI_NOTES)+2, 
             output_size_duration=len(DURATIONS)+2,
             output_size_gap=len(GAPS)+2,
+            num_layers=num_layers,
             SOS_token=SOS_token,
             MAX_LENGTH=MAX_LENGTH,
             dropout_p=dropout_p,
@@ -40,12 +42,12 @@ class CustomModelRNN(BaseModel):
         return decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions
 
 class EncoderRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, dropout_p=0.1):
+    def __init__(self, input_size, hidden_size, num_layers, dropout_p=0.1):
         super(EncoderRNN, self).__init__()
         self.hidden_size = hidden_size
 
         self.embedding = nn.Embedding(input_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size, num_layers=2, batch_first=True)
+        self.gru = nn.GRU(hidden_size, hidden_size, num_layers=num_layers, batch_first=True)
         self.dropout = nn.Dropout(dropout_p)
 
     def forward(self, input):
@@ -70,11 +72,11 @@ class BahdanauAttention(nn.Module):
         return context, weights
 
 class AttnDecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size_note, output_size_duration, output_size_gap, dropout_p=0.1, device='cpu', SOS_token = 0, MAX_LENGTH = 100):
+    def __init__(self, hidden_size, output_size_note, output_size_duration, output_size_gap, num_layers, dropout_p=0.1, device='cpu', SOS_token = 0, MAX_LENGTH = 100):
         super(AttnDecoderRNN, self).__init__()
         self.embedding = nn.Embedding(output_size_note + output_size_duration + output_size_gap, hidden_size)
         self.attention = BahdanauAttention(hidden_size)
-        self.gru = nn.GRU(4 * hidden_size, hidden_size, num_layers=2, batch_first=True)
+        self.gru = nn.GRU(4 * hidden_size, hidden_size, num_layers=num_layers, batch_first=True)
         self.out_note = nn.Linear(hidden_size, output_size_note)
         self.out_duration = nn.Linear(hidden_size, output_size_duration)
         self.out_gap = nn.Linear(hidden_size, output_size_gap)

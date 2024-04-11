@@ -1,15 +1,17 @@
 model:
   dropout: 0.1
-  hidden_size: 512
+  hidden_size: 256
+  num_layers: 8
 
 training:
   batch_size: 2000
-  epochs: 20
-  lr: 1e-5
+  epochs: 15
+  lr: 1e-4
   weight_decay: 0.01
   note_loss_weight: 1.0
   duration_loss_weight: 1.0
   gap_loss_weight: 1.0
+  print_predictions: True # print first eval predictions during training
 
 data:
   data_dir: './data/new_dataset_length20'

@@ -28,7 +28,7 @@ def train_epoch(dataloader, model, encoder_optimizer,
 
     total_loss = 0
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}")
-
+    is_printed = True # Put to False to print first prediction
     for data in progress_bar:
         input_tensor = data['input_ids'].to(device)
         target_notes = data['labels']['notes'].to(device)
@@ -62,15 +62,26 @@ def train_epoch(dataloader, model, encoder_optimizer,
         decoder_optimizer.step()
 
         total_loss += loss.item()
+
+        if not is_printed:
+            print(f"\nInput: {data['input_ids'][0].cpu().numpy()}")
+            print(f"\nTarget notes: {data['labels']['notes'][0].cpu().numpy()}")
+            print(f"Predicted notes: {decoder_outputs_notes.argmax(-1).cpu().numpy()[0]}")
+            print(f"\nTarget durations: {data['labels']['durations'][0].cpu().numpy()}")
+            print(f"Predicted durations: {decoder_outputs_durations.argmax(-1).cpu().numpy()[0]}")
+            print(f"\nTarget gaps: {data['labels']['gaps'][0].cpu().numpy()}")
+            print(f"Predicted gaps: {decoder_outputs_gaps.argmax(-1).cpu().numpy()[0]}")
+            is_printed = True
+
         progress_bar.set_postfix({'Training Loss': total_loss / len(dataloader)})
 
     return total_loss / len(dataloader)
 
-def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight):
+def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions=False):
     with torch.no_grad():
         total_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Validation: ")
-        is_printed = False # Put to False to print the first prediction
+        is_printed = False
         for data in progress_bar:
             input_tensor = data['input_ids'].to(device)
             target_notes = data['labels']['notes'].to(device)
@@ -95,17 +106,21 @@ def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss
 
             total_loss += loss.item()
 
-            if not is_printed:
-                print(f"Input: {data['input_ids'][0]}")
-                print(f"Target: {data['labels']['notes'][0]}")
-                print(f"Prediction: {decoder_outputs_notes.argmax(-1).cpu().numpy()[0]}")
+            if not is_printed and print_predictions:
+                print(f"\nInput: {data['input_ids'][0].cpu().numpy()}")
+                print(f"\nTarget notes: {data['labels']['notes'][0].cpu().numpy()}")
+                print(f"Predicted notes: {decoder_outputs_notes.argmax(-1).cpu().numpy()[0]}")
+                print(f"\nTarget durations: {data['labels']['durations'][0].cpu().numpy()}")
+                print(f"Predicted durations: {decoder_outputs_durations.argmax(-1).cpu().numpy()[0]}")
+                print(f"\nTarget gaps: {data['labels']['gaps'][0].cpu().numpy()}")
+                print(f"Predicted gaps: {decoder_outputs_gaps.argmax(-1).cpu().numpy()[0]}")
                 is_printed = True
             progress_bar.set_postfix({'Validation Loss': total_loss / len(dataloader)})
 
         return total_loss / len(dataloader)
 
 def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001, weight_decay=0.01,
-               note_loss_weight=0.8, duration_loss_weight=0.2, gap_loss_weight=0.2, output_folder='/log'):
+               note_loss_weight=0.8, duration_loss_weight=0.2, gap_loss_weight=0.2, output_folder='/log', print_predictions=False):
     train_losses, val_losses = [], []
 
     encoder_optimizer = AdamW(model.encoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
@@ -125,7 +140,7 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
             print(f"Epoch {epoch}, training Loss: {loss}")
 
             model.eval()
-            val_loss = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight)
+            val_loss = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions)
             val_losses.append(val_loss)
             print(f"Epoch {epoch}, Validation Loss: {val_loss}")
 
@@ -143,6 +158,10 @@ def main():
     run_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     output_folder = os.path.join(out_dir, run_dir)
     os.makedirs(output_folder, exist_ok=True)
+
+    # Save config file
+    with open(os.path.join(output_folder, 'config.yaml'), 'w') as f:
+        yaml.dump(config, f)
     
     # Set seed
     set_seed(config['seed'])
@@ -153,8 +172,6 @@ def main():
     lines = open('./vocab/syllables.txt', 'r', encoding='utf-8').read().strip().split('\n')
     for syllable in lines:
         syllables.addWord(syllable)
-    print(f"Number of syllables: {syllables.n_words}")
-
 
     model = CustomModelRNN(
         input_size=syllables.n_words,
@@ -162,6 +179,7 @@ def main():
         SOS_token=0, 
         MAX_LENGTH=config['data']['max_sequence_length'], 
         dropout_p=config['model']['dropout'],
+        num_layers=config['model']['num_layers'],
         device=device, 
         )
 
@@ -189,7 +207,8 @@ def main():
         note_loss_weight=config['training']['note_loss_weight'],
         duration_loss_weight=config['training']['duration_loss_weight'],
         gap_loss_weight=config['training']['gap_loss_weight'],
-        output_folder=output_folder
+        output_folder=output_folder,
+        print_predictions=config['training']['print_predictions']
     )
     
     # Plot training and validation loss

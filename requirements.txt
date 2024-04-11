@@ -9,3 +9,5 @@ tqdm
 scikit-learn
 mido
 sentencepiece
+midi2audio
+pretty_midi
