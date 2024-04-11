@@ -10,7 +10,7 @@ from midi2audio import FluidSynth
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model_dir = './runs/RNN/2024-04-11_16-18-26/' # Change this to the path of the model you want to use
+model_dir = './runs/RNN/2024-04-11_16-52-50/' # Change this to the path of the model you want to use
 
 model_path = os.path.join(model_dir, 'model.pt')
 config_path = os.path.join(model_dir, 'config.yaml')
@@ -61,14 +61,17 @@ def decode_midi_sequence(decoder_outputs_notes, decoder_outputs_durations, decod
             note_id = note.argmax().item()
             duration_id = duration.argmax().item()
             gap_id = gap.argmax().item()
-            try:
-                note = decode_note(note_id-2)
-                duration = decode_duration(duration_id-2)
-                gap = decode_gap(gap_id-2)
-                sequence.append([note, duration, gap])
-            except:
-                err_count += 1
-                continue
+            if note_id > 1 and duration_id > 1 and gap_id > 1:
+                try:
+                    note = decode_note(note_id-2)
+                    duration = decode_duration(duration_id-2)
+                    gap = decode_gap(gap_id-2)
+                    sequence.append([note, duration, gap])
+                except:
+                    err_count += 1
+                    continue
+            else:
+                break # EOS token reached
     if err_count > 0:
         print(f"Error count: {err_count}")
     return sequence
