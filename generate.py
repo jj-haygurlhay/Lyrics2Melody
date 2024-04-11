@@ -1,3 +1,4 @@
+import re
 from time import sleep
 from transformers import (
     AutoModelForSeq2SeqLM,
@@ -5,79 +6,81 @@ from transformers import (
     AutoTokenizer,
     T5Tokenizer,
 )
+import yaml
+from dataloader.vocab import Lang
+from models.custom_rnn import CustomModelRNN
 from utils.quantize import decode_note, decode_duration, decode_gap
 import torch 
 from inference.generate_midi import GenerateMidi
 from midi2audio import FluidSynth
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+HYPS_FILE = './config/hyps.yaml'
+
+def serialize_lyrics(lyrics, max_length, syllables_lang, eos_token):
+    lyrics_tokens = []
+    lyrics = lyrics.lower()
+    lyrics = re.sub(r'[^a-z0-9\s]', '', lyrics)
+    for syllable in lyrics.split(' ')[:max_length - 1]:
+        lyrics_tokens.append(syllables_lang.word2index[syllable])
+    lyrics_tokens.append(eos_token)
+    return lyrics_tokens
+
+with open(HYPS_FILE, "r") as f:
+    config = yaml.load(f, Loader=yaml.FullLoader)
+
+model_path = './model.pth'
+
+# Create language objects
+syllables = Lang('syllables')
+lines = open('./vocab/syllables.txt', 'r', encoding='utf-8').read().strip().split('\n')
+for syllable in lines:
+    syllables.addWord(syllable)
+
+model = CustomModelRNN(
+    input_size=syllables.n_words,
+    hidden_size=config['model']['hidden_size'], 
+    SOS_token=0, 
+    MAX_LENGTH=config['data']['max_sequence_length'], 
+    dropout_p=config['model']['dropout'],
+    device=device, 
+)
+model.load_state_dict(torch.load(model_path))
+model.to(device)
 
 
-model_path = './runs/2024-04-10_13-51-53/checkpoint-1600'
-
-model = T5ForConditionalGeneration.from_pretrained(model_path).to('cuda')
-tokenizer = T5Tokenizer.from_pretrained(model_path)
-
-
-max_length = 20
+max_length = config['data']['max_sequence_length']
 
 # text = 'People get ready a train a you need no baggage you just get on board you need is faith to hear the diesels need no ticket you just thank the Lord so people get ready coast the doors and board hope for among those loved the most there no room for the hopeless sinner who would hurt mankind believe me now have pity on grow thinner for no hiding place against the throne so people get ready a train a you need no baggage you just get on board you need is faith to hear the diesels'
 # text = 'Peo ple get rea dy a train a you need no bag gage you just get on board you need is faith to hear the die sels need no tic ket you just thank the Lord so peo ple get rea dy coast the doors and board hope for among those loved the most there no room for the hope less sin ner who would hurt man kind be lieve me now have pi ty on grow thin ner for no hi ding place against the throne so peo ple get rea dy a train a you need no bag gage you just get on board you need is faith to hear the die sels'
 text = 'Peo ple get rea dy a train a you need no bag gage you just get on board you need'
-inputs = ['notes: ' + text]
+inputs = [serialize_lyrics(text, max_length, syllables, 1)]
+input_tensor = torch.tensor(inputs).to(device)
 
-inputs = tokenizer(inputs, truncation=True, max_length=max_length*2, return_tensors='pt').to(device)
-output = model.generate(
-    **inputs, 
-    num_beams=4, 
-    min_length=10, 
-    max_length=max_length, 
-    do_sample=True, 
-    temperature=1.0, 
-    repetition_penalty=1.0,
-    # top_k=50, 
-    #top_p=0.98, 
-    eos_token_id=tokenizer.eos_token_id, 
-    pad_token_id=tokenizer.pad_token_id,
-    #early_stopping=True,
-    num_return_sequences=1,
-    bad_words_ids=[[42612]]
-    )
+decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _ = model(input_tensor)
 
-decoded_output = tokenizer.batch_decode(output, skip_special_tokens=True)[0]
-decoded_output = decoded_output.replace('.', '')
-
-def decode_midi_sequence(decoded_output):
+def decode_midi_sequence(decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps):
     sequence = []
-    note, duration, gap = -1, -1, -1
     err_count = 0
-    notes = []
-    durations = []
-    gaps = []
-    for token in decoded_output.split(' '):
-        for sub_token in token[1:-1].split('_'):
-            if 'note' in sub_token:
-                note = decode_note(int(sub_token[4:]))
-            elif 'duration' in sub_token:
-                duration = decode_duration(int(sub_token[8:]))
-            elif 'gap' in sub_token:
-                gap = decode_gap(int(sub_token[3:]))
+    for note, duration, gap in zip(decoder_outputs_notes[0], decoder_outputs_durations[0], decoder_outputs_gaps[0]):
+            note_id = note.argmax().item()
+            duration_id = duration.argmax().item()
+            gap_id = gap.argmax().item()
+            try:
+                note = decode_note(note_id-2)
+                duration = decode_duration(duration_id-2)
+                gap = decode_gap(gap_id-2)
                 sequence.append([note, duration, gap])
-                notes.append(note)
-                durations.append(duration)
-                gaps.append(gap)
-                note, duration, gap = -1, -1, -1
-            else:
-                note, duration, gap = -1, -1, -1
+            except:
                 err_count += 1
+                continue
     if err_count > 0:
         print(f"Error count: {err_count}")
-    return sequence, notes, durations, gaps
+    return sequence
 
-midi_sequence, notes, durations, gaps = decode_midi_sequence(decoded_output)
-print(tokenizer.batch_decode(inputs['input_ids'], skip_special_tokens=True)[0])
+midi_sequence = decode_midi_sequence(decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps)
 print(midi_sequence)
-print('Input Sequence length: ', len(inputs['input_ids'][0]))
+print('Input Sequence length: ', len(inputs[0]))
 print('Output Sequence length: ', len(midi_sequence))
 
 # Generate MIDI file

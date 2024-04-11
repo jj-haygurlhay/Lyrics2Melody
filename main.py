@@ -1,21 +1,156 @@
+from tqdm import tqdm
 import yaml
 import torch
 from torch.utils.data import DataLoader
-from models import MusicT5, MusicGPT2
-from training import Trainer as CustomTrainer
-# from pytorch_lightning import Trainer as PLTrainer
+from dataloader.collator import SongsCollator
+from dataloader.vocab import Lang
 from transformers import (
-    GPT2Tokenizer, 
-    GPT2Config, 
-    T5Tokenizer, 
-    T5Config, 
     set_seed
 )
-from dataloader import SongsDataset, SongsCollator
+from dataloader import SongsDataset
+from models import CustomModelRNN
+from torch.optim import AdamW
+import torch.nn as nn
+
 from utils.quantize import DURATIONS, GAPS, MIDI_NOTES
 
 HYPS_FILE = './config/hyps.yaml'
+EOS_token = 1
+SOS_token = 0
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+import time
+import math
+
+def asMinutes(s):
+    m = math.floor(s / 60)
+    s -= m * 60
+    return '%dm %ds' % (m, s)
+
+def timeSince(since, percent):
+    now = time.time()
+    s = now - since
+    es = s / (percent)
+    rs = es - s
+    return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
+
+def train_epoch(dataloader, model, encoder_optimizer,
+          decoder_optimizer, criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight):
+
+    total_loss = 0
+    progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}")
+
+    for data in progress_bar:
+        input_tensor = data['input_ids'].to(device)
+        target_notes = data['labels']['notes'].to(device)
+        target_durations = data['labels']['durations'].to(device)
+        target_gaps = data['labels']['gaps'].to(device)
+
+        target_tensor = torch.cat([target_notes.unsqueeze(-1), target_durations.unsqueeze(-1), target_gaps.unsqueeze(-1)], dim=-1)
+
+        encoder_optimizer.zero_grad()
+        decoder_optimizer.zero_grad()
+
+        decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _ = model(input_tensor, target_tensor)
+
+        loss_notes = criterion(
+            decoder_outputs_notes.view(-1, decoder_outputs_notes.size(-1)),
+            target_notes.view(-1)
+        )
+        loss_durations = criterion( 
+            decoder_outputs_durations.view(-1, decoder_outputs_durations.size(-1)),
+            target_durations.view(-1)
+        )
+        loss_gaps = criterion(
+            decoder_outputs_gaps.view(-1, decoder_outputs_gaps.size(-1)),
+            target_gaps.view(-1)
+        )
+        loss = note_loss_weight * loss_notes + duration_loss_weight * loss_durations + gap_loss_weight * loss_gaps
+
+        loss.backward()
+
+        encoder_optimizer.step()
+        decoder_optimizer.step()
+
+        total_loss += loss.item()
+        progress_bar.set_postfix({'Training Loss': total_loss / len(dataloader)})
+
+    return total_loss / len(dataloader)
+
+def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001, weight_decay=0.01,
+               plot_every=1, note_loss_weight=0.8, duration_loss_weight=0.2, gap_loss_weight=0.2):
+    plot_losses = []
+    plot_loss_total = 0  # Reset every plot_every
+
+    encoder_optimizer = AdamW(model.encoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
+    decoder_optimizer = AdamW(model.decoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
+    criterion = nn.CrossEntropyLoss()
+
+    for epoch in range(1, n_epochs + 1):
+        model.train()
+        loss = train_epoch(train_dataloader, model, encoder_optimizer, decoder_optimizer, criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight)
+        plot_loss_total += loss
+
+        print(f"Epoch {epoch}, training Loss: {loss}")
+
+        plot_loss_avg = plot_loss_total / plot_every
+        plot_losses.append(plot_loss_avg)
+        plot_loss_total = 0
+
+        model.eval()
+        val_loss = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight)
+        print(f"Epoch {epoch}, Validation Loss: {val_loss}")
+
+def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight):
+    with torch.no_grad():
+        total_loss = 0
+        progress_bar = tqdm(dataloader, desc=f"Validation: ")
+        is_printed = False
+        for data in progress_bar:
+            input_tensor = data['input_ids'].to(device)
+            target_notes = data['labels']['notes'].to(device)
+            target_durations = data['labels']['durations'].to(device)
+            target_gaps = data['labels']['gaps'].to(device)
+
+            decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _ = model(input_tensor)
+
+            loss_notes = criterion(
+                decoder_outputs_notes.view(-1, decoder_outputs_notes.size(-1)),
+                target_notes.view(-1)
+            )
+            loss_durations = criterion( 
+                decoder_outputs_durations.view(-1, decoder_outputs_durations.size(-1)),
+                target_durations.view(-1)
+            )
+            loss_gaps = criterion(
+                decoder_outputs_gaps.view(-1, decoder_outputs_gaps.size(-1)),
+                target_gaps.view(-1)
+            )
+            loss = note_loss_weight * loss_notes + duration_loss_weight * loss_durations + gap_loss_weight * loss_gaps
+
+            total_loss += loss.item()
+
+            if not is_printed:
+                print(f"Input: {data['input_ids'][0]}")
+                print(f"Target: {data['labels']['notes'][0]}")
+                print(f"Prediction: {decoder_outputs_notes.argmax(-1).cpu().numpy()[0]}")
+                is_printed = True
+            progress_bar.set_postfix({'Validation Loss': total_loss / len(dataloader)})
+
+        return total_loss / len(dataloader)
+
+
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
+import matplotlib.ticker as ticker
+import numpy as np
+
+def showPlot(points):
+    plt.figure()
+    fig, ax = plt.subplots()
+    # this locator puts ticks at regular intervals
+    loc = ticker.MultipleLocator(base=0.2)
+    ax.yaxis.set_major_locator(loc)
+    plt.plot(points)
 
 def main():
     with open(HYPS_FILE, "r") as f:
@@ -24,63 +159,50 @@ def main():
     # Set seed
     set_seed(config['seed'])
 
-    # pl_trainer = PLTrainer()
+    
+    # Create language objects
+    syllables = Lang('syllables')
+    lines = open('./vocab/syllables.txt', 'r', encoding='utf-8').read().strip().split('\n')
+    for syllable in lines:
+        syllables.addWord(syllable)
+    print(f"Number of syllables: {syllables.n_words}")
 
-    # Load model and tokenizer
-    model_name = config['model']['model_name']
-    del config['model']['model_name']
 
-    if 't5' in model_name:
-        t5_config = T5Config.from_pretrained(
-            't5-small'
-            )
-        print(t5_config)
-        model = MusicT5(t5_config, **config['model']) # TODO create config object
-        tokenizer = T5Tokenizer.from_pretrained(pretrained_model_name_or_path='t5-small')
-        tokenizer.add_tokens([f'<note{i}>' for i in range(len(MIDI_NOTES))])
-        tokenizer.add_tokens([f'<duration{i}>' for i in range(len(DURATIONS))])
-        tokenizer.add_tokens([f'<gap{i}>' for i in range(len(GAPS))])
-        model.t5.resize_token_embeddings(len(tokenizer))
+    model = CustomModelRNN(
+        input_size=syllables.n_words,
+        hidden_size=config['model']['hidden_size'], 
+        SOS_token=0, 
+        MAX_LENGTH=config['data']['max_sequence_length'], 
+        dropout_p=config['model']['dropout'],
+        device=device, 
+        )
 
-    elif 'gpt' in model_name:
-        gpt2_config = GPT2Config.from_pretrained('gpt2')
-        model = MusicGPT2(gpt2_config, **config['model']) # TODO create config object
-        tokenizer = GPT2Tokenizer.from_pretrained(pretrained_model_name_or_path='gpt2')
-        tokenizer.padding_side = "left"
-        tokenizer.pad_token = tokenizer.eos_token
-    else:
-        raise ValueError("Model not implemented")
-
-    model.to(device)
-
-    # Create dataset and collator
     batch_size = config['training']['batch_size']
 
+        
+
+    # Create dataset and collator
     train_dataset = SongsDataset(config['data']['data_dir'], split='train')
     valid_dataset = SongsDataset(config['data']['data_dir'], split='valid')
     test_dataset  = SongsDataset(config['data']['data_dir'], split='test')
-    collator = SongsCollator(tokenizer=tokenizer, output_eos=config['data']['output_eos'], max_length=config['data']['max_sequence_length'], use_syllables=config['data']['use_syllables'])
+    collator = SongsCollator(syllables_lang=syllables, output_eos=EOS_token, max_length=config['data']['max_sequence_length'])
     
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collator, pin_memory=True, num_workers=4,persistent_workers=True)
-    val_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, collate_fn=collator, pin_memory=True, num_workers=4,persistent_workers=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, collate_fn=collator, pin_memory=True, num_workers=4, persistent_workers=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collator, pin_memory=True, num_workers=0)
+    val_loader   = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator, pin_memory=True, num_workers=0)
+    test_loader  = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator, pin_memory=True,  num_workers=0)
 
-    # pl_trainer.fit(model, tokenizer, train_loader, val_loader, test_loader)
-
-    # Create trainer
-    custom_trainer = CustomTrainer(
-        model=model, 
-        pl_trainer=None,
-        device=device,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        test_loader=test_loader,
-        collator=collator,
-        **config['training']
-    )
-
-    # Train model
-    custom_trainer.train()
+    train(
+        train_loader, 
+        val_loader, 
+        model, 
+        n_epochs=config['training']['epochs'], 
+        learning_rate=config['training']['lr'], 
+        weight_decay=config['training']['weight_decay'], 
+        note_loss_weight=config['training']['note_loss_weight'],
+        duration_loss_weight=config['training']['duration_loss_weight'],
+        gap_loss_weight=config['training']['gap_loss_weight']
+        )
+    torch.save(model.state_dict(), 'model.pth')
 
 if __name__ == "__main__":
     main()

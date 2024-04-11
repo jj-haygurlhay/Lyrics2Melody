@@ -4,19 +4,24 @@ import torch.nn as nn
 import torch.nn.functional as F
 from utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
+# Inspired from https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
 
 class CustomModelRNN(BaseModel):
 
-    def __init__(self, encoder, device, SOS_token=0, MAX_LENGTH=100, dropout_p=0.1, train_encoder=False):
+    def __init__(self, input_size, hidden_size, device, SOS_token=0, MAX_LENGTH=100, dropout_p=0.1):
         super().__init__()
         self.device = device
 
-        # Take pretrained encoder
-        self.encoder = encoder
+        # Define Encoder
+        self.encoder = EncoderRNN(
+            input_size, 
+            hidden_size, 
+            dropout_p=dropout_p
+            )
 
         # Define decoders
         self.decoder = AttnDecoderRNN(
-            hidden_size=encoder.config.n_positions,
+            hidden_size=hidden_size,
             output_size_note=len(MIDI_NOTES)+2, 
             output_size_duration=len(DURATIONS)+2,
             output_size_gap=len(GAPS)+2,
@@ -26,28 +31,28 @@ class CustomModelRNN(BaseModel):
             device=device
         )
 
-        self.train_encoder = train_encoder
-
         self.encoder.to(device)
         self.decoder.to(device)
 
-    def forward(self, x, attn, target=None):
-        if not self.train_encoder:
-            with torch.no_grad():
-                output = self.encoder(x, attn, output_hidden_states=True, output_attentions=False)
-                encoder_outputs = output.hidden_states[0]
-                encoder_hidden = output.last_hidden_state
-        else:
-            output = self.encoder(x, attn, output_hidden_states=True, output_attentions=False)
-            encoder_outputs = output.hidden_states[0]
-            encoder_hidden = output.last_hidden_state
-            
-        encoder_hidden = encoder_hidden.permute(1, 0, 2)[-1, :, :].unsqueeze(0).contiguous()
+    def forward(self, x, target=None):            
+        encoder_outputs, encoder_hidden = self.encoder(x)
         decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions = self.decoder(encoder_outputs, encoder_hidden, target)
         return decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions
 
+class EncoderRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, dropout_p=0.1):
+        super(EncoderRNN, self).__init__()
+        self.hidden_size = hidden_size
 
-# Code from https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
+        self.embedding = nn.Embedding(input_size, hidden_size)
+        self.gru = nn.GRU(hidden_size, hidden_size, num_layers=2, batch_first=True)
+        self.dropout = nn.Dropout(dropout_p)
+
+    def forward(self, input):
+        embedded = self.dropout(self.embedding(input))
+        output, hidden = self.gru(embedded)
+        return output, hidden
+    
 class BahdanauAttention(nn.Module):
     def __init__(self, hidden_size):
         super(BahdanauAttention, self).__init__()
@@ -69,7 +74,7 @@ class AttnDecoderRNN(nn.Module):
         super(AttnDecoderRNN, self).__init__()
         self.embedding = nn.Embedding(output_size_note + output_size_duration + output_size_gap, hidden_size)
         self.attention = BahdanauAttention(hidden_size)
-        self.gru = nn.GRU(4 * hidden_size, hidden_size, batch_first=True)
+        self.gru = nn.GRU(4 * hidden_size, hidden_size, num_layers=2, batch_first=True)
         self.out_note = nn.Linear(hidden_size, output_size_note)
         self.out_duration = nn.Linear(hidden_size, output_size_duration)
         self.out_gap = nn.Linear(hidden_size, output_size_gap)
@@ -95,7 +100,6 @@ class AttnDecoderRNN(nn.Module):
             decoder_outputs_durations.append(decoder_output_duration)
             decoder_outputs_gaps.append(decoder_output_gap)
             attentions.append(attn_weights)
-
 
             if target_tensor is not None:
                 # Teacher forcing: Feed the target as the next input
@@ -125,7 +129,7 @@ class AttnDecoderRNN(nn.Module):
     def forward_step(self, input, hidden, encoder_outputs):
         embedded = self.dropout(self.embedding(input)).reshape(input.size(0), 1, -1)
 
-        query = hidden.permute(1, 0, 2)
+        query = hidden.permute(1, 0, 2)[:, -1, :].unsqueeze(1)
         context, attn_weights = self.attention(query, encoder_outputs)
         input_gru = torch.cat((embedded, context), dim=2)
 
