@@ -1,3 +1,4 @@
+import os
 from tqdm import tqdm
 import yaml
 import torch
@@ -11,27 +12,16 @@ from dataloader import SongsDataset
 from models import CustomModelRNN
 from torch.optim import AdamW
 import torch.nn as nn
+from datetime import datetime
+import matplotlib.pyplot as plt
+import csv
 
-from utils.quantize import DURATIONS, GAPS, MIDI_NOTES
 
 HYPS_FILE = './config/hyps.yaml'
 EOS_token = 1
 SOS_token = 0
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-import time
-import math
 
-def asMinutes(s):
-    m = math.floor(s / 60)
-    s -= m * 60
-    return '%dm %ds' % (m, s)
-
-def timeSince(since, percent):
-    now = time.time()
-    s = now - since
-    es = s / (percent)
-    rs = es - s
-    return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 def train_epoch(dataloader, model, encoder_optimizer,
           decoder_optimizer, criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight):
@@ -76,35 +66,11 @@ def train_epoch(dataloader, model, encoder_optimizer,
 
     return total_loss / len(dataloader)
 
-def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001, weight_decay=0.01,
-               plot_every=1, note_loss_weight=0.8, duration_loss_weight=0.2, gap_loss_weight=0.2):
-    plot_losses = []
-    plot_loss_total = 0  # Reset every plot_every
-
-    encoder_optimizer = AdamW(model.encoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
-    decoder_optimizer = AdamW(model.decoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
-    criterion = nn.CrossEntropyLoss()
-
-    for epoch in range(1, n_epochs + 1):
-        model.train()
-        loss = train_epoch(train_dataloader, model, encoder_optimizer, decoder_optimizer, criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight)
-        plot_loss_total += loss
-
-        print(f"Epoch {epoch}, training Loss: {loss}")
-
-        plot_loss_avg = plot_loss_total / plot_every
-        plot_losses.append(plot_loss_avg)
-        plot_loss_total = 0
-
-        model.eval()
-        val_loss = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight)
-        print(f"Epoch {epoch}, Validation Loss: {val_loss}")
-
 def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight):
     with torch.no_grad():
         total_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Validation: ")
-        is_printed = False
+        is_printed = False # Put to False to print the first prediction
         for data in progress_bar:
             input_tensor = data['input_ids'].to(device)
             target_notes = data['labels']['notes'].to(device)
@@ -138,23 +104,45 @@ def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss
 
         return total_loss / len(dataloader)
 
+def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001, weight_decay=0.01,
+               note_loss_weight=0.8, duration_loss_weight=0.2, gap_loss_weight=0.2, output_folder='/log'):
+    train_losses, val_losses = [], []
 
-import matplotlib.pyplot as plt
-plt.switch_backend('agg')
-import matplotlib.ticker as ticker
-import numpy as np
+    encoder_optimizer = AdamW(model.encoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
+    decoder_optimizer = AdamW(model.decoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
+    criterion = nn.CrossEntropyLoss()
 
-def showPlot(points):
-    plt.figure()
-    fig, ax = plt.subplots()
-    # this locator puts ticks at regular intervals
-    loc = ticker.MultipleLocator(base=0.2)
-    ax.yaxis.set_major_locator(loc)
-    plt.plot(points)
+    csv_file = os.path.join(output_folder, 'training_log.csv')
+
+    with open(csv_file, mode='w') as csv_file:
+        csv_writer = csv.writer(csv_file)
+
+        csv_writer.writerow(['Epoch', 'Training Loss', 'Validation Loss'])
+        for epoch in range(1, n_epochs + 1):
+            model.train()
+            loss = train_epoch(train_dataloader, model, encoder_optimizer, decoder_optimizer, criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight)
+            train_losses.append(loss)
+            print(f"Epoch {epoch}, training Loss: {loss}")
+
+            model.eval()
+            val_loss = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight)
+            val_losses.append(val_loss)
+            print(f"Epoch {epoch}, Validation Loss: {val_loss}")
+
+            csv_writer.writerow([epoch, loss, val_loss])
+            csv_file.flush()
+            
+        return train_losses, val_losses
 
 def main():
     with open(HYPS_FILE, "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
+
+    # Create output file
+    out_dir = config['out_dir']
+    run_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    output_folder = os.path.join(out_dir, run_dir)
+    os.makedirs(output_folder, exist_ok=True)
     
     # Set seed
     set_seed(config['seed'])
@@ -191,7 +179,7 @@ def main():
     val_loader   = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator, pin_memory=True, num_workers=0)
     test_loader  = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator, pin_memory=True,  num_workers=0)
 
-    train(
+    train_loss, val_loss = train(
         train_loader, 
         val_loader, 
         model, 
@@ -200,9 +188,22 @@ def main():
         weight_decay=config['training']['weight_decay'], 
         note_loss_weight=config['training']['note_loss_weight'],
         duration_loss_weight=config['training']['duration_loss_weight'],
-        gap_loss_weight=config['training']['gap_loss_weight']
-        )
-    torch.save(model.state_dict(), 'model.pth')
+        gap_loss_weight=config['training']['gap_loss_weight'],
+        output_folder=output_folder
+    )
+    
+    # Plot training and validation loss
+    plt.plot(train_loss, label='Training Loss')
+    plt.plot(val_loss, label='Validation Loss')
+    plt.legend()
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training and Validation Loss')
+    plt.grid()
+    plt.savefig(os.path.join(output_folder, 'loss_plot.png'))
+
+    # Save model
+    torch.save(model.state_dict(), os.path.join(output_folder, 'model.pt'))
 
 if __name__ == "__main__":
     main()

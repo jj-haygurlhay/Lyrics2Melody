@@ -4,7 +4,7 @@ model:
 
 training:
   batch_size: 2000
-  epochs: 200
+  epochs: 20
   lr: 1e-5
   weight_decay: 0.01
   note_loss_weight: 1.0
@@ -13,7 +13,7 @@ training:
 
 data:
   data_dir: './data/new_dataset_length20'
-  max_sequence_length: 21
-  output_eos: 1
+  max_sequence_length: 21 # include <eos>
 
 seed: 42
+out_dir: './runs/RNN'
