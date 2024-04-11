@@ -66,7 +66,4 @@ def generate_main(model_path, model_name, test_dataset_path):
 
 
 if __name__ == "__main__":
-    model_path = 'checkpoints/model_epoch_4.bin'
-    data_path = 'data/dataset_matrices/test_data_matrix.npy'
-    model_name = 't5'
-    generate_main(model_path=model_path, model_name=model_name, test_dataset_path = data_path)
+    model_path = 'checkpoints/model_epoch_4.bin'    data_path = 'data/dataset_matrices/test_data_matrix.npy'    model_name = 't5'    generate_main(model_path=model_path, model_name=model_name, test_dataset_path = data_path)
