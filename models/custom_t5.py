@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from transformers import T5EncoderModel, T5Config, T5ForConditionalGeneration, T5Model
+from transformers import T5EncoderModel, T5Model, T5Config
 from utils.quantize import decode_note, decode_duration, decode_gap
 
 class LyricsEncoder(nn.Module):
@@ -8,57 +8,43 @@ class LyricsEncoder(nn.Module):
         super(LyricsEncoder, self).__init__()
         self.encoder = T5EncoderModel.from_pretrained(pretrained_model_name)
 
-        # additional layers can be added here for further processing
-        self.custom_layers = nn.Sequential(
-            nn.Linear(self.encoder.config.d_model, self.encoder.config.d_model),
-            nn.ReLU(),
-        )
-
     def forward(self, input_ids, attention_mask=None):
-        encoder_output = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        custom_output = self.custom_layers(encoder_output.last_hidden_state)
-        
-        return custom_output
-
+        return self.encoder(input_ids=input_ids, attention_mask=attention_mask)
 
 class MultiHeadMusicDecoder(nn.Module):
-    def __init__(self, config, feedback_mode):
+    def __init__(self, config, pretrained_model_name="t5-small"):
         super(MultiHeadMusicDecoder, self).__init__()
-        self.feedback_mode = feedback_mode
-        self.shared_decoder_layers = nn.GRU(input_size=config.d_model, 
-                                             hidden_size=config.d_model, 
-                                             num_layers=config.num_decoder_layers, 
-                                             batch_first=True)
+        self.t5_model = T5Model.from_pretrained(pretrained_model_name)
         
-        # Initialize separate output heads for notes, durations, and gaps
         self.note_head = nn.Linear(config.d_model, config.note_vocab_size)
         self.duration_head = nn.Linear(config.d_model, config.duration_vocab_size)
         self.gap_head = nn.Linear(config.d_model, config.gap_vocab_size)
 
-    def forward(self, encoder_hidden_states, decoder_input_ids=None, initial_input=None, mask=None):
-        if self.feedback_mode:
-            outputs = []
-            input = initial_input
-            hidden = None
-            for i in range(decoder_input_ids.size(1)):
-                output, hidden = self.shared_decoder_layers(input, hidden)
-                if mask is not None:
-                    output = output.masked_fill(mask[:, i].unsqueeze(1) == 0, 0)
+    def forward(self, encoder_hidden_states, decoder_input_ids, attention_mask=None):
 
-                note_logits = self.note_head(output)
-                duration_logits = self.duration_head(output)
-                gap_logits = self.gap_head(output)
-                outputs.append((note_logits, duration_logits, gap_logits))
+        if decoder_input_ids is None:
+            decoder_input_ids = torch.full((encoder_hidden_states.size(0), 1),
+                                           self.t5_model.config.pad_token_id,
+                                           dtype=torch.long,
+                                           device=encoder_hidden_states.device)
+        
+        decoder_outputs = self.t5_model.decoder(
+            input_ids=decoder_input_ids,
+            encoder_hidden_states=encoder_hidden_states,
+            attention_mask=self.create_causal_mask(decoder_input_ids.size(1)),
+            encoder_attention_mask=attention_mask
+        )
+        
+        note_logits = self.note_head(decoder_outputs.last_hidden_state)
+        duration_logits = self.duration_head(decoder_outputs.last_hidden_state)
+        gap_logits = self.gap_head(decoder_outputs.last_hidden_state)
 
-                input = torch.cat((note_logits, duration_logits, gap_logits), dim=-1)
-            return torch.stack(outputs, dim=1)
-        else:
-            output, _ = self.shared_decoder_layers(encoder_hidden_states)
-            note_logits = self.note_head(output)
-            duration_logits = self.duration_head(output)
-            gap_logits = self.gap_head(output)
+        return note_logits, duration_logits, gap_logits
 
-            return note_logits, duration_logits, gap_logits
+    def create_causal_mask(self, size):
+        """Creates a causal mask to hide future tokens."""
+        mask = torch.triu(torch.ones((size, size), device=self.t5_model.device), diagonal=1).bool()
+        return mask.unsqueeze(0)
 
 class CustomSeq2SeqModel(nn.Module):
     def __init__(self, encoder, decoder, **kwargs):
@@ -69,23 +55,16 @@ class CustomSeq2SeqModel(nn.Module):
         self.note_loss_weight = kwargs.get('note_loss_weight', 0.5)
         self.duration_loss_weight = kwargs.get('duration_loss_weight', 0.25)
         self.gap_loss_weight = kwargs.get('gap_loss_weight', 0.25)
-        
-        self.feedback_mode = kwargs.get('feedback_mode', False)
 
-    def forward(self, input_ids, attention_mask=None, decoder_input_ids=None, initial_input=None):
-        encoder_outputs = self.encoder(input_ids, attention_mask)
+    def forward(self, input_ids, attention_mask=None, decoder_input_ids=None):
+        encoder_outputs = self.encoder(input_ids, attention_mask=attention_mask)
+        note_logits, duration_logits, gap_logits = self.decoder(
+            encoder_hidden_states=encoder_outputs.last_hidden_state,
+            decoder_input_ids=decoder_input_ids,
+            attention_mask=attention_mask
+        )
 
-        mask = self.create_combined_mask(decoder_input_ids) if decoder_input_ids is not None else None
-
-        if self.feedback_mode and initial_input is not None:
-            decoder_outputs = self.decoder(encoder_hidden_states=encoder_outputs,
-                                        decoder_input_ids=decoder_input_ids,
-                                        initial_input=initial_input,
-                                        mask=mask)
-        else:
-            decoder_outputs = self.decoder(encoder_hidden_states=encoder_outputs, mask=mask)
-
-        return decoder_outputs
+        return note_logits, duration_logits, gap_logits
     
     def compute_loss(self, note_logits, duration_logits, gap_logits, note_targets, duration_targets, gap_targets):
         ignore_index = -1
@@ -97,18 +76,6 @@ class CustomSeq2SeqModel(nn.Module):
                     duration_loss * self.duration_loss_weight +
                     gap_loss * self.gap_loss_weight)
         return total_loss
-
-    def create_combined_mask(self, input_ids):
-        pad_mask = (input_ids != 0).unsqueeze(1).unsqueeze(2)  # Shape: [batch_size, 1, 1, seq_len]
-
-        # causal mask -> prevents attention to future tokens
-        seq_len = input_ids.size(1)
-        causal_mask = torch.triu(torch.ones((seq_len, seq_len), device=input_ids.device), diagonal=1).bool()
-        causal_mask = causal_mask.unsqueeze(0).unsqueeze(1)  # Shape: [1, 1, seq_len, seq_len]
-
-        combined_mask = pad_mask & causal_mask
-
-        return combined_mask.float().masked_fill(combined_mask == False, 0).masked_fill(combined_mask == True, float('-inf'))
 
 
     def decode_outputs(self, note_logits, duration_logits, gap_logits):

@@ -45,12 +45,17 @@ class Trainer:
                 
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
+                decoder_input_ids = batch['decoder_input_ids'].to(self.device)
                 
                 note_targets = batch['note_targets'].to(self.device)
                 duration_targets = batch['duration_targets'].to(self.device)
                 gap_targets = batch['gap_targets'].to(self.device)
 
-                note_logits, duration_logits, gap_logits = self.model(input_ids=input_ids, attention_mask=attention_mask)
+                note_logits, duration_logits, gap_logits = self.model(
+                    input_ids=input_ids, 
+                    attention_mask=attention_mask,
+                    decoder_input_ids=decoder_input_ids
+                )
                 loss = self.model.compute_loss(note_logits, duration_logits, gap_logits, note_targets, duration_targets, gap_targets)
 
                 loss.backward()
@@ -78,12 +83,17 @@ class Trainer:
             for batch in tqdm(self.val_loader, desc="Validating"):
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
+                decoder_input_ids = batch['decoder_input_ids'].to(self.device)
                 
                 note_targets = batch['note_targets'].to(self.device)
                 duration_targets = batch['duration_targets'].to(self.device)
                 gap_targets = batch['gap_targets'].to(self.device)
-                
-                note_logits, duration_logits, gap_logits = self.model(input_ids=input_ids, attention_mask=attention_mask)
+
+                note_logits, duration_logits, gap_logits = self.model(
+                    input_ids=input_ids, 
+                    attention_mask=attention_mask,
+                    decoder_input_ids=decoder_input_ids
+                )
                 loss = self.model.compute_loss(note_logits, duration_logits, gap_logits, note_targets, duration_targets, gap_targets)
 
                 total_loss += loss.item()
@@ -98,43 +108,42 @@ class Trainer:
 
     def test(self):
         self.model.eval()
+        self.model.decoder.feedback_mode = False
         total_loss = 0
-        last_notes, last_durations, last_gaps = None, None, None  # placeholders for the last sequences
         with torch.no_grad():
-            for batch_idx, batch in enumerate(tqdm(self.test_loader, desc="Testing")):
+            for i, batch in enumerate(tqdm(self.test_loader, desc="Testing")):
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
+                decoder_input_ids = batch['decoder_input_ids'].to(self.device)
                 
                 note_targets = batch['note_targets'].to(self.device)
                 duration_targets = batch['duration_targets'].to(self.device)
                 gap_targets = batch['gap_targets'].to(self.device)
-                
-                note_logits, duration_logits, gap_logits = self.model(input_ids=input_ids, attention_mask=attention_mask)
+
+                note_logits, duration_logits, gap_logits = self.model(
+                    input_ids=input_ids, 
+                    attention_mask=attention_mask,
+                    decoder_input_ids=decoder_input_ids
+                )
                 loss = self.model.compute_loss(note_logits, duration_logits, gap_logits, note_targets, duration_targets, gap_targets)
+                
                 total_loss += loss.item()
 
-                last_notes, last_durations, last_gaps = self.model.decode_outputs(note_logits, duration_logits, gap_logits)
+                # Decode outputs to human-readable format
+                notes, durations, gaps = self.model.decode_outputs(note_logits, duration_logits, gap_logits)
 
-        midi_filename = f"./outputs/test/test_midi_final_batch_last_input.mid"
-        wav_filename = f"./outputs/test/test_audio_final_batch_last_input.wav"
-        os.makedirs(os.path.dirname(midi_filename), exist_ok=True)
-
-        # Generate MIDI file
-        midi_generator = GenerateMidi(last_notes[-1], last_durations[-1], last_gaps[-1]) 
-        midi_pattern = midi_generator.create_midi_pattern_from_discretized_data(list(zip(last_notes[-1], last_durations[-1], last_gaps[-1])))
-        midi_pattern.write(midi_filename)
-        
-        # Convert MIDI to audio
-        FluidSynth().midi_to_audio(midi_filename, wav_filename)
-        print(f"Generated MIDI and WAV files saved as {midi_filename} and {wav_filename}")
+                # Generate and save MIDI and WAV files
+                midi_filename = generate_filename("generated_music", "mid", i)
+                wav_filename = generate_filename("generated_music", "wav", i)
+                midi_generator = GenerateMidi(notes, durations, gaps)
+                midi_pattern = midi_generator.create_midi_pattern_from_discretized_data(list(zip(notes, durations, gaps)))
+                midi_pattern.write(midi_filename)
+                FluidSynth().midi_to_audio(midi_filename, wav_filename)
+                print(f"Generated MIDI and WAV files saved as {midi_filename} and {wav_filename}")
 
         avg_test_loss = total_loss / len(self.test_loader)
+        self.writer.add_scalar("Loss/Test", avg_test_loss)
         print(f"Test Loss: {avg_test_loss}")
-
-    def generate_midi(self, notes, durations, gaps, filename):
-        midi_generator = GenerateMidi(notes, durations, gaps)
-        midi_pattern = midi_generator.create_midi_pattern_from_discretized_data(list(zip(notes, durations, gaps)))
-        midi_pattern.write(filename)
 
 
     def save_model(self, epoch, name=""):

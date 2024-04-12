@@ -38,7 +38,8 @@ def main():
         t5_config.gap_vocab_size = len(GAPS)
         
         encoder = LyricsEncoder(pretrained_model_name="t5-small")
-        decoder = MultiHeadMusicDecoder(config=t5_config, feedback_mode=config['model']['feedback_mode'])
+        # decoder = MultiHeadMusicDecoder(config=t5_config, feedback_mode=config['model']['feedback_mode'])
+        decoder = MultiHeadMusicDecoder(config=t5_config)
     
         model = CustomSeq2SeqModel(encoder, decoder, **config['model'])
 
