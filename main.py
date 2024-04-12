@@ -29,17 +29,17 @@ def main():
     del config['model']['model_name']
 
     if 't5' in model_name:
-        tokenizer = T5Tokenizer.from_pretrained(pretrained_model_name_or_path='t5-small')
+        tokenizer = T5Tokenizer.from_pretrained(pretrained_model_name_or_path='t5-base')
         
-        t5_config = T5Config.from_pretrained('t5-small')
+        t5_config = T5Config.from_pretrained('t5-base')
         
         t5_config.note_vocab_size = len(MIDI_NOTES)
         t5_config.duration_vocab_size = len(DURATIONS)
         t5_config.gap_vocab_size = len(GAPS)
         
-        encoder = LyricsEncoder(pretrained_model_name="t5-small")
+        encoder = LyricsEncoder(pretrained_model_name="t5-base")
         # decoder = MultiHeadMusicDecoder(config=t5_config, feedback_mode=config['model']['feedback_mode'])
-        decoder = MultiHeadMusicDecoder(config=t5_config)
+        decoder = MultiHeadMusicDecoder(config=t5_config, pretrained_model_name="t5-base")
     
         model = CustomSeq2SeqModel(encoder, decoder, **config['model'])
 

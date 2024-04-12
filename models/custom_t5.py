@@ -52,6 +52,10 @@ class CustomSeq2SeqModel(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
         
+        if kwargs.get('freeze_encoder', False):
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+
         self.note_loss_weight = kwargs.get('note_loss_weight', 0.5)
         self.duration_loss_weight = kwargs.get('duration_loss_weight', 0.25)
         self.gap_loss_weight = kwargs.get('gap_loss_weight', 0.25)
@@ -79,6 +83,8 @@ class CustomSeq2SeqModel(nn.Module):
 
 
     def decode_outputs(self, note_logits, duration_logits, gap_logits):
+
+        # TODO What if we sample instead?
         predicted_notes = torch.argmax(torch.softmax(note_logits, dim=-1), dim=-1)
         predicted_durations = torch.argmax(torch.softmax(duration_logits, dim=-1), dim=-1)
         predicted_gaps = torch.argmax(torch.softmax(gap_logits, dim=-1), dim=-1)
@@ -90,6 +96,8 @@ class CustomSeq2SeqModel(nn.Module):
 
         for i in range(predicted_notes.shape[0]):
             notes = [decode_note(n.item()) for n in predicted_notes[i]]
+
+            # TODO these are wrong decoding methods for our logits (reason we have 0 gap and 1 duration always)
             durations = [decode_duration(d.item()) for d in predicted_durations[i]]
             gaps = [decode_gap(g.item()) for g in predicted_gaps[i]]
 

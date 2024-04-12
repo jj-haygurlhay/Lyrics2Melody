@@ -5,15 +5,16 @@ model:
   num_layers: 6
   num_heads: 8
   feedback_mode: True # TODO for self feed into decoder (annoying to implement)
-  note_loss_weight: 0.5
-  duration_loss_weight: 0.25
-  gap_loss_weight: 0.25
+  note_loss_weight: 0.34
+  duration_loss_weight: 0.33
+  gap_loss_weight: 0.33
+  freeze_encoder: True
 
 training:
-  batch_size: 32
+  batch_size: 64
   epochs: 10
-  lr: 5e-5
-  weight_decay: 0
+  lr: 1e-5
+  weight_decay: 1e-4
   train_encoder: False
 
 data:
