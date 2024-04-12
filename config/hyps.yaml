@@ -8,7 +8,7 @@ model:
   note_loss_weight: 0.34
   duration_loss_weight: 0.33
   gap_loss_weight: 0.33
-  freeze_encoder: True
+  freeze_encoder: False # Seems to make it worse
 
 training:
   batch_size: 64

@@ -53,8 +53,10 @@ class CustomSeq2SeqModel(nn.Module):
         self.decoder = decoder
         
         if kwargs.get('freeze_encoder', False):
+            print("Freezing encoder...")
             for param in self.encoder.parameters():
                 param.requires_grad = False
+            print("Freezing done!")
 
         self.note_loss_weight = kwargs.get('note_loss_weight', 0.5)
         self.duration_loss_weight = kwargs.get('duration_loss_weight', 0.25)
