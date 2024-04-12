@@ -75,6 +75,7 @@ def main():
 
     # Train model
     custom_trainer.train()
+    custom_trainer.test()
 
 if __name__ == "__main__":
     main()
