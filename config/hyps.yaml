@@ -5,9 +5,9 @@ model:
   num_layers: 6
   num_heads: 8
   feedback_mode: True
-  note_loss_weight: 1
-  duration_loss_weight: 1
-  gap_loss_weight: 1
+  note_loss_weight: 0.5
+  duration_loss_weight: 0.25
+  gap_loss_weight: 0.25
 
 training:
   batch_size: 32
