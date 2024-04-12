@@ -4,14 +4,14 @@ model:
   expansion_factor: 4
   num_layers: 6
   num_heads: 8
-  feedback_mode: False
-  note_loss_weight: 0.5
-  duration_loss_weight: 0.3
-  gap_loss_weight: 0.2
+  feedback_mode: True
+  note_loss_weight: 1
+  duration_loss_weight: 1
+  gap_loss_weight: 1
 
 training:
   batch_size: 32
-  epochs: 11
+  epochs: 10
   lr: 5e-5
   weight_decay: 0
   train_encoder: False
