@@ -9,10 +9,11 @@ model:
   duration_loss_weight: 0.33
   gap_loss_weight: 0.33
   freeze_encoder: False # Seems to make it worse
+  pretrained_model_name: 't5-small'
 
 training:
   batch_size: 64
-  epochs: 10
+  epochs: 3
   lr: 1e-5
   weight_decay: 1e-4
   train_encoder: False
