@@ -11,3 +11,4 @@ mido
 sentencepiece
 midi2audio
 tensorboard
+prettymidi

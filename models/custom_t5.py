@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from transformers import T5EncoderModel, T5Config, T5ForConditionalGeneration, T5Model
+from utils.quantize import decode_note, decode_duration, decode_gap
 
 class LyricsEncoder(nn.Module):
     def __init__(self, pretrained_model_name="t5-small"):
@@ -112,3 +113,15 @@ class CustomSeq2SeqModel(nn.Module):
         mask = torch.triu(torch.ones((seq_length, seq_length), dtype=torch.float32) * float('-inf'), diagonal=1)
         mask = mask.unsqueeze(0).expand(batch_size, -1, -1) 
         return mask
+
+def decode_outputs(note_logits, duration_logits, gap_logits):
+    predicted_notes = torch.argmax(torch.softmax(note_logits, dim=-1), dim=-1)
+    predicted_durations = torch.argmax(torch.softmax(duration_logits, dim=-1), dim=-1)
+    predicted_gaps = torch.argmax(torch.softmax(gap_logits, dim=-1), dim=-1)
+
+    # Assuming you have mapping functions defined
+    notes = [decode_note(n.item()) for n in predicted_notes]
+    durations = [decode_duration(d.item()) for d in predicted_durations]
+    gaps = [decode_gap(g.item()) for g in predicted_gaps]
+
+    return notes, durations, gaps

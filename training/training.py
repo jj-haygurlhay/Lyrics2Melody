@@ -4,6 +4,9 @@ from transformers import get_linear_schedule_with_warmup
 from torch.optim import AdamW
 from tqdm.auto import tqdm
 from torch.utils.tensorboard import SummaryWriter
+from midi2audio import FluidSynth
+from inference.generate_midi import GenerateMidi
+from utils.generate_filename import generate_filename
 
 
 class Trainer:
@@ -97,6 +100,8 @@ class Trainer:
         self.model.eval()
         self.model.decoder.feedback_mode = False
         total_loss = 0
+        all_midi_data = []  
+        
         with torch.no_grad():
             for batch in tqdm(self.test_loader, desc="Testing"):
                 input_ids = batch['input_ids'].to(self.device)
@@ -111,9 +116,24 @@ class Trainer:
 
                 total_loss += loss.item()
 
+                # Decode outputs to human-readable format
+                notes, durations, gaps = self.model.decode_outputs(note_logits, duration_logits, gap_logits)
+                all_midi_data.append((notes, durations, gaps))
+
         avg_test_loss = total_loss / len(self.test_loader)
         self.writer.add_scalar("Loss/Test", avg_test_loss)
         print(f"Test Loss: {avg_test_loss}")
+
+        # Optionally, generate a MIDI file from one of the predictions for listening
+        for i, (notes, durations, gaps) in enumerate(all_midi_data):
+            midi_generator = GenerateMidi(notes, durations, gaps)
+            midi_pattern = midi_generator.create_midi_pattern_from_discretized_data(list(zip(notes, durations, gaps)))
+            midi_filename = f"./outputs/{generate_filename("generated_music", "mid")}"
+            wav_filename = f'./outputs/{generate_filename("generated_music", "wav")}'
+            midi_pattern.write(midi_filename)
+            FluidSynth().midi_to_audio(midi_filename, wav_filename)
+            print(f"Generated MIDI and WAV files saved as {midi_filename} and {wav_filename}")
+
 
     def save_model(self, epoch, name=""):
         os.makedirs(self.checkpoint_path, exist_ok=True)
