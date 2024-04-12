@@ -4,22 +4,25 @@ model:
   expansion_factor: 4
   num_layers: 6
   num_heads: 8
+  feedback_mode: False
+  note_loss_weight: 0.5
+  duration_loss_weight: 0.3
+  gap_loss_weight: 0.2
 
 training:
-  batch_size: 352
-  epochs: 50
-  lr: 1e-4
+  batch_size: 16
+  epochs: 10
+  lr: 5e-5
   weight_decay: 0
   train_encoder: False
-  note_loss_weight: 1.0
-  duration_loss_weight: 1.0
-  gap_loss_weight: 1.0
-
 
 data:
   data_dir: './data/new_dataset'
   max_sequence_length: 20
   output_eos: 1
   use_syllables: False
+  note_vocab_size: 128
+  duration_vocab_size: 32
+  gap_vocab_size: 32
 
 seed: 42

@@ -7,116 +7,116 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 class Trainer:
-    def __init__(self, model, pl_trainer, device, train_loader, val_loader, test_loader, collator, **hparams):
-        self.model = model
-        self.pl_trainer = pl_trainer
+    def __init__(self, model, device, train_loader, val_loader, test_loader, **hparams):
+        self.model = model.to(device)
         self.device = device
-        self.checkpoint_path = "./checkpoints/"
-        
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.test_loader = test_loader
+        self.checkpoint_path = "./outputs/checkpoints/"
         
-        self.collator = collator
-        self.epochs = hparams["epochs"]
-        self.lr = float(hparams["lr"])
-        self.batch_size = hparams["batch_size"]
+        self.feedback_mode = hparams.get('feedback_mode', False)
+        self.epochs = hparams.get("epochs", 5)
+        self.lr = float(hparams.get("lr", 1e-4))
+        self.batch_size = hparams.get("batch_size", 8)
+        
+        self.model.decoder.feedback_mode = self.feedback_mode
 
-
-        num_training_steps = int(len(train_loader) / self.batch_size * self.epochs)
+        num_training_steps = len(train_loader) * self.epochs
         self.optimizer = AdamW(model.parameters(), lr=self.lr)
         self.scheduler = get_linear_schedule_with_warmup(self.optimizer, num_warmup_steps=0, num_training_steps=num_training_steps)
         
-
         self.writer = SummaryWriter()
         self.writer.add_hparams(hparams, {})
-
-        self.best_val_loss = -100
+        self.best_val_loss = float('inf')
 
     def train(self):
-        self.model.train()
-
         for epoch in range(self.epochs):
+            self.model.train()
+            self.model.decoder.feedback_mode = self.feedback_mode
             total_loss = 0
             progress_bar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}")
 
-            for i, batch in enumerate(progress_bar):
+            for batch in progress_bar:
                 self.optimizer.zero_grad()
-
+                
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
-                labels = batch['labels'].to(self.device)
+                
+                note_targets = batch['note_targets'].to(self.device)
+                duration_targets = batch['duration_targets'].to(self.device)
+                gap_targets = batch['gap_targets'].to(self.device)
 
-                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                loss = outputs.loss
+                note_logits, duration_logits, gap_logits = self.model(input_ids=input_ids, attention_mask=attention_mask)
+                loss = self.model.compute_loss(note_logits, duration_logits, gap_logits, note_targets, duration_targets, gap_targets)
 
                 loss.backward()
                 self.optimizer.step()
                 self.scheduler.step()
 
                 total_loss += loss.item()
-                progress_bar.set_postfix({'Training Loss': total_loss / len(self.train_loader)})
+                progress_bar.set_postfix({'Training Loss': total_loss / (progress_bar.n + 1)})
 
             avg_training_loss = total_loss / len(self.train_loader)
             self.writer.add_scalar("Loss/Training", avg_training_loss, epoch)
-            
-            # Periodic model saving
-            # if (epoch + 1) % 5 == 0:
-            #     self.save_model(epoch)
-        
-
-            print(f"\nEpoch {epoch+1}, Training Loss: {total_loss / len(self.train_loader)}")
+            print(f"\nEpoch {epoch+1}, Training Loss: {avg_training_loss}")
             self.validate(epoch)
 
-        self.save_model(epoch)
+            if (epoch + 1) % 5 == 0:
+                self.save_model(epoch)
+
         self.writer.close()
 
     def validate(self, epoch):
         self.model.eval()
+        self.model.decoder.feedback_mode = False
         total_loss = 0
-        progress_bar = tqdm(self.val_loader, desc="Validating")
-
         with torch.no_grad():
-            for batch in progress_bar:
+            for batch in tqdm(self.val_loader, desc="Validating"):
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
-                labels = batch['labels'].to(self.device)
                 
-                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                loss = outputs.loss
+                note_targets = batch['note_targets'].to(self.device)
+                duration_targets = batch['duration_targets'].to(self.device)
+                gap_targets = batch['gap_targets'].to(self.device)
+                
+                note_logits, duration_logits, gap_logits = self.model(input_ids=input_ids, attention_mask=attention_mask)
+                loss = self.model.compute_loss(note_logits, duration_logits, gap_logits, note_targets, duration_targets, gap_targets)
+
                 total_loss += loss.item()
 
         avg_validation_loss = total_loss / len(self.val_loader)
-        print(f"Validation Loss: {avg_validation_loss}")
         self.writer.add_scalar("Loss/Validation", avg_validation_loss, epoch)
+        print(f"Validation Loss: {avg_validation_loss}")
 
         if avg_validation_loss < self.best_val_loss:
             self.best_val_loss = avg_validation_loss
-            self.save_model(epoch=None, name="best")
+            self.save_model(epoch, "best")
 
     def test(self):
         self.model.eval()
+        self.model.decoder.feedback_mode = False
         total_loss = 0
-        progress_bar = tqdm(self.test_loader, desc="Testing")
-
         with torch.no_grad():
-            for batch in progress_bar:
+            for batch in tqdm(self.test_loader, desc="Testing"):
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
-                labels = batch['labels'].to(self.device)
                 
-                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                loss = outputs.loss
+                note_targets = batch['note_targets'].to(self.device)
+                duration_targets = batch['duration_targets'].to(self.device)
+                gap_targets = batch['gap_targets'].to(self.device)
+                
+                note_logits, duration_logits, gap_logits = self.model(input_ids=input_ids, attention_mask=attention_mask)
+                loss = self.model.compute_loss(note_logits, duration_logits, gap_logits, note_targets, duration_targets, gap_targets)
+
                 total_loss += loss.item()
 
-        print(f"\nTest Loss: {total_loss / len(self.test_loader)}")
-        self.writer.add_scalar("Loss/Test", total_loss / len(self.test_loader))
+        avg_test_loss = total_loss / len(self.test_loader)
+        self.writer.add_scalar("Loss/Test", avg_test_loss)
+        print(f"Test Loss: {avg_test_loss}")
 
     def save_model(self, epoch, name=""):
         os.makedirs(self.checkpoint_path, exist_ok=True)
-        if name == "":
-            model_save_path = f"./{self.checkpoint_path}/model_epoch_{epoch+1}.bin"
-        else:
-            model_save_path = f"./{self.checkpoint_path}/model_epoch_{name}.bin"
+        model_save_path = os.path.join(self.checkpoint_path, f"model_epoch_{name if name else epoch+1}.bin")
         torch.save(self.model.state_dict(), model_save_path)
         print(f"Saved model checkpoint to {model_save_path}")

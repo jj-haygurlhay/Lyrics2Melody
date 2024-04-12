@@ -1,18 +1,16 @@
 import yaml
 import torch
 from torch.utils.data import DataLoader
-from models import MusicT5, MusicGPT2
+from models import CustomSeq2SeqModel, LyricsEncoder, MultiHeadMusicDecoder
 from training import Trainer as CustomTrainer
 # from pytorch_lightning import Trainer as PLTrainer
 from transformers import (
-    GPT2Tokenizer, 
-    GPT2Config, 
-    T5Tokenizer, 
+    T5Tokenizer,
     T5Config, 
     set_seed
 )
 from dataloader import SongsDataset, SongsCollator
-from utils.quantize import DURATIONS, GAPS, MIDI_NOTES
+from utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
 HYPS_FILE = './config/hyps.yaml'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -31,23 +29,21 @@ def main():
     del config['model']['model_name']
 
     if 't5' in model_name:
-        t5_config = T5Config.from_pretrained(
-            't5-small'
-            )
-        print(t5_config)
-        model = MusicT5(t5_config, **config['model']) # TODO create config object
         tokenizer = T5Tokenizer.from_pretrained(pretrained_model_name_or_path='t5-small')
-        tokenizer.add_tokens([f'<note{i}>' for i in range(len(MIDI_NOTES))])
-        tokenizer.add_tokens([f'<duration{i}>' for i in range(len(DURATIONS))])
-        tokenizer.add_tokens([f'<gap{i}>' for i in range(len(GAPS))])
-        model.t5.resize_token_embeddings(len(tokenizer))
+        
+        t5_config = T5Config.from_pretrained('t5-small')
+        
+        t5_config.note_vocab_size = len(MIDI_NOTES)
+        t5_config.duration_vocab_size = len(DURATIONS)
+        t5_config.gap_vocab_size = len(GAPS)
+        
+        encoder = LyricsEncoder(pretrained_model_name="t5-small")
+        decoder = MultiHeadMusicDecoder(config=t5_config, feedback_mode=config['model']['feedback_mode'])
+    
+        model = CustomSeq2SeqModel(encoder, decoder, **config['model'])
 
     elif 'gpt' in model_name:
-        gpt2_config = GPT2Config.from_pretrained('gpt2')
-        model = MusicGPT2(gpt2_config, **config['model']) # TODO create config object
-        tokenizer = GPT2Tokenizer.from_pretrained(pretrained_model_name_or_path='gpt2')
-        tokenizer.padding_side = "left"
-        tokenizer.pad_token = tokenizer.eos_token
+        pass
     else:
         raise ValueError("Model not implemented")
 
@@ -69,13 +65,11 @@ def main():
 
     # Create trainer
     custom_trainer = CustomTrainer(
-        model=model, 
-        pl_trainer=None,
+        model=model,
         device=device,
         train_loader=train_loader,
         val_loader=val_loader,
         test_loader=test_loader,
-        collator=collator,
         **config['training']
     )
 
