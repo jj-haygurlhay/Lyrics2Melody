@@ -128,7 +128,7 @@ class Trainer:
         for i, (notes, durations, gaps) in enumerate(all_midi_data):
             midi_generator = GenerateMidi(notes, durations, gaps)
             midi_pattern = midi_generator.create_midi_pattern_from_discretized_data(list(zip(notes, durations, gaps)))
-            midi_filename = f"./outputs/{generate_filename("generated_music", "mid")}"
+            midi_filename = f'./outputs/{generate_filename("generated_music", "mid")}'
             wav_filename = f'./outputs/{generate_filename("generated_music", "wav")}'
             midi_pattern.write(midi_filename)
             FluidSynth().midi_to_audio(midi_filename, wav_filename)

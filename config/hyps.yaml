@@ -10,8 +10,8 @@ model:
   gap_loss_weight: 0.2
 
 training:
-  batch_size: 16
-  epochs: 10
+  batch_size: 32
+  epochs: 11
   lr: 5e-5
   weight_decay: 0
   train_encoder: False
