@@ -175,7 +175,9 @@ def main():
 
     model = CustomModelRNN(
         input_size=syllables.n_words,
-        hidden_size=config['model']['hidden_size'], 
+        decoder_hidden_size=config['model']['decoder_hidden_size'],
+        encoder_hidden_size=config['model']['encoder_hidden_size'],
+        embedding_dim=config['model']['embedding_dim'], 
         SOS_token=0, 
         MAX_LENGTH=config['data']['max_sequence_length'], 
         dropout_p=config['model']['dropout'],
