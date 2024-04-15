@@ -252,3 +252,30 @@ def test():
 if __name__ == "__main__":
     test()
 
+class analyser:
+    def __init__(self, lyrics, notes, durations, gaps, ref_notes, ref_durations, ref_gaps):
+        assert len(lyrics) == len(notes) == len(gaps) == len(durations)
+        self.lyrics = lyrics
+        self.notes = notes
+        self.durations = durations
+        self.gaps = gaps
+        self.ref_notes = ref_notes
+        self.ref_durations = ref_durations
+        self.ref_gaps = ref_gaps
+        self.results = dict()
+        pass
+    def analyse(self):
+            self.results["span"] = []
+            for lyric, note, duration, gap in zip(self.lyrics, self.notes, self.durations, self.gaps):
+                self.results["span"] += [max(note) - min(note)]
+                self.results["rep2"] += [ngram_repetition(note, 2)]
+                self.results["rep3"] += [ngram_repetition(note, 3)]
+                self.results["rep4"] += [ngram_repetition(note, 4)]
+                self.results["unique"] += [[len(count_ngrams(note, 1).keys())]]
+                self.results["restless"] += [count_ngrams(gap,1)[(0.0,)]]
+                self.results["avg_rest"] += [np.average(gap)]
+                self.results["song_len"] += [sum(duration)+ sum(gap)]
+                self.results["scale_diff"] += [find_closest_fit(note, duration, SCALES)]
+    def compute_references():
+        pass
+
