@@ -22,6 +22,7 @@ class SlidingWindow:
             # Assume syl_lyrics are separated by space and midi_notes by comma
             midi_notes = self.parse_midi_notes(row['midi_notes'])
             syl_lyrics = row['syl_lyrics'].split(' ')
+            lyrics = row['lyrics'].split(' ')
 
             # Check if we have enough data to create at least one window
             if len(midi_notes) < self.window_size or len(syl_lyrics) < self.window_size:
@@ -33,7 +34,8 @@ class SlidingWindow:
             print(f"Row {index} generated {len(paired_windows)} paired windows.")
 
             for syl_window, midi_window in paired_windows:
-                words = self.retrieve_words(syl_window, row['lyrics'], row['syl_lyrics'])
+                words = self.retrieve_words(syl_window, lyrics, row['syl_lyrics'])
+                
                 augmented_rows.append({
                     'filename': row['filename'],
                     'lyrics': words,
@@ -56,21 +58,29 @@ class SlidingWindow:
         pattern = re.compile(r'\[\s*(\d+\.\d+|\d+),\s*(\d+\.\d+|\d+),\s*(\d+\.\d+|\d+)\s*\]')
         return [list(map(float, match.groups())) for match in pattern.finditer(midi_notes_str)]
 
-    def retrieve_words(self, syl_window, full_lyrics, syl_lyrics):
+    def retrieve_words(self, syl_window, full_lyrics_words, syl_lyrics):
         words_to_keep = []
-        full_lyrics_words = full_lyrics.split()
-        syl_lyrics_list = syl_lyrics.split(',')  
+        syl_lyrics_list = syl_lyrics.split()
 
-    # Create a list of syllables for each word
-        word_syllables = []
-        for word in full_lyrics_words:
-            word_syls = [syl for syl in syl_lyrics_list if syl.startswith(word)]
-            word_syllables.append(word_syls)
-    
-    # Determine which words to keep based on the presence of their syllables in syl_window
-        for word_syls in word_syllables:
-            if any(syl in syl_window for syl in word_syls):
-            # The word is kept if any of its syllables are in syl_window
-                words_to_keep.append(word_syls[0].split('_')[0])  # Splitting to get the word without syllable index
-    
-        return ' '.join(words_to_keep)
+        # Mapping of syllables to their index in the full lyrics
+        syl_to_index = {}
+        for index, word in enumerate(full_lyrics_words):
+            for syl in word.split(' '):
+                syl_to_index[syl] = index
+
+        # Go through each syllable in the syl_window
+        for syl in syl_window:
+            # Find which word the syllable could be a part of
+            word_indices = [index for part, index in syl_to_index.items() if syl in part]
+            
+            # Find the correct word that the syllable is part of and add to words_to_keep
+            for index in word_indices:
+                if ' '.join(full_lyrics_words[index].split()).startswith(syl):
+                    words_to_keep.append(full_lyrics_words[index])
+                    break  # Once the correct word is found, stop checking
+
+        # Deduplicate while maintaining order
+        seen = set()
+        deduplicated_words = [x for x in words_to_keep if not (x in seen or seen.add(x))]
+
+        return ' '.join(deduplicated_words)
