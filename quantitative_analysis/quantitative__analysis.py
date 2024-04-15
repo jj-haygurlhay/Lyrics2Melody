@@ -6,14 +6,14 @@ from transformers import (
     AutoTokenizer
 )
 import pandas as pd
-from utils.quantize import decode_note, decode_duration, decode_gap
+from project_utils.quantize import decode_note, decode_duration, decode_gap
 import torch
 import numpy as np
-from utils.ngram import ngram_repetition, count_ngrams
-from utils.BLEUscore import bleu_score
+from project_utils.ngram import ngram_repetition, count_ngrams
+from project_utils.BLEUscore import bleu_score
 from dataloader.dataset import SongsDataset
 import json
-from utils.scale import scale, find_closest_fit
+from project_utils.scale import scale, find_closest_fit
 # from inference import decode_midi_sequence
 
 SCALES = [scale(scale.MAJOR_SCALE, i) for i in range(12)] + [scale(scale.MINOR_SCALE, i) for i in range(12)]

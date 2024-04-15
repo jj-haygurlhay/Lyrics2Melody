@@ -3,7 +3,7 @@ import torch
 import json
 import numpy as np
 
-from utils.quantize import encode_note, encode_duration, encode_gap
+from project_utils.quantize import encode_note, encode_duration, encode_gap
     
 class SongsCollator:
     def __init__(self, syllables_lang, output_eos=1, max_length=128):

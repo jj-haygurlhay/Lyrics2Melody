@@ -1,4 +1,4 @@
-from utils import midi_utils
+from project_utils import midi_utils
 import pretty_midi
 
 class GenerateMidi:

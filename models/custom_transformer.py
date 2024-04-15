@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from utils.generation_utils import BeamHypotheses, top_k_top_p_filtering
-from utils.quantize import MIDI_NOTES, DURATIONS, GAPS
+from project_utils.generation_utils import BeamHypotheses, top_k_top_p_filtering
+from project_utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
 
 class CustomModelTransformer(BaseModel):

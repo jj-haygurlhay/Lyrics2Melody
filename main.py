@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from tqdm import tqdm
 import yaml
 import torch
@@ -28,7 +29,6 @@ def train_epoch(dataloader, model, encoder_optimizer,
 
     total_loss = 0
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}")
-    is_printed = True # Put to False to print first prediction
     for data in progress_bar:
         input_tensor = data['input_ids'].to(device)
         target_notes = data['labels']['notes'].to(device)
@@ -40,7 +40,7 @@ def train_epoch(dataloader, model, encoder_optimizer,
         encoder_optimizer.zero_grad()
         decoder_optimizer.zero_grad()
 
-        decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _ = model(input_tensor, target_tensor)
+        decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _, _, _, _ = model(input_tensor, target_tensor)
 
         loss_notes = criterion(
             decoder_outputs_notes.view(-1, decoder_outputs_notes.size(-1)),
@@ -63,21 +63,11 @@ def train_epoch(dataloader, model, encoder_optimizer,
 
         total_loss += loss.item()
 
-        if not is_printed:
-            print(f"\nInput: {data['input_ids'][0].cpu().numpy()}")
-            print(f"\nTarget notes: {data['labels']['notes'][0].cpu().numpy()}")
-            print(f"Predicted notes: {decoder_outputs_notes.argmax(-1).cpu().numpy()[0]}")
-            print(f"\nTarget durations: {data['labels']['durations'][0].cpu().numpy()}")
-            print(f"Predicted durations: {decoder_outputs_durations.argmax(-1).cpu().numpy()[0]}")
-            print(f"\nTarget gaps: {data['labels']['gaps'][0].cpu().numpy()}")
-            print(f"Predicted gaps: {decoder_outputs_gaps.argmax(-1).cpu().numpy()[0]}")
-            is_printed = True
-
         progress_bar.set_postfix({'Training Loss': total_loss / len(dataloader)})
 
     return total_loss / len(dataloader)
 
-def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions=False):
+def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions, generate_temp):
     with torch.no_grad():
         total_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Validation: ")
@@ -88,7 +78,7 @@ def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss
             target_durations = data['labels']['durations'].to(device)
             target_gaps = data['labels']['gaps'].to(device)
 
-            decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _ = model(input_tensor)
+            decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _, decoded_notes, decoded_durations, decoded_gaps = model(input_tensor, generate_temp=generate_temp)
 
             loss_notes = criterion(
                 decoder_outputs_notes.view(-1, decoder_outputs_notes.size(-1)),
@@ -109,23 +99,23 @@ def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss
             if not is_printed and print_predictions:
                 print(f"\nInput: {data['input_ids'][0].cpu().numpy()}")
                 print(f"\nTarget notes: {data['labels']['notes'][0].cpu().numpy()}")
-                print(f"Predicted notes: {decoder_outputs_notes.argmax(-1).cpu().numpy()[0]}")
+                print(f"Predicted notes: {decoded_notes[0].cpu().numpy()}")
                 print(f"\nTarget durations: {data['labels']['durations'][0].cpu().numpy()}")
-                print(f"Predicted durations: {decoder_outputs_durations.argmax(-1).cpu().numpy()[0]}")
+                print(f"Predicted durations: {decoded_durations[0].cpu().numpy()}")
                 print(f"\nTarget gaps: {data['labels']['gaps'][0].cpu().numpy()}")
-                print(f"Predicted gaps: {decoder_outputs_gaps.argmax(-1).cpu().numpy()[0]}")
+                print(f"Predicted gaps: {decoded_gaps[0].cpu().numpy()}")
                 is_printed = True
             progress_bar.set_postfix({'Validation Loss': total_loss / len(dataloader)})
 
         return total_loss / len(dataloader)
 
 def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001, weight_decay=0.01,
-               note_loss_weight=0.8, duration_loss_weight=0.2, gap_loss_weight=0.2, output_folder='/log', print_predictions=False):
+               note_loss_weight=0.8, duration_loss_weight=0.2, gap_loss_weight=0.2, output_folder='/log', print_predictions=False, generate_temp=1.0):
     train_losses, val_losses = [], []
 
     encoder_optimizer = AdamW(model.encoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
     decoder_optimizer = AdamW(model.decoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.NLLLoss()
 
     csv_file = os.path.join(output_folder, 'training_log.csv')
 
@@ -140,7 +130,7 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
             print(f"Epoch {epoch}, training Loss: {loss}")
 
             model.eval()
-            val_loss = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions)
+            val_loss = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions, generate_temp)
             val_losses.append(val_loss)
             print(f"Epoch {epoch}, Validation Loss: {val_loss}")
 
@@ -210,7 +200,8 @@ def main():
         duration_loss_weight=config['training']['duration_loss_weight'],
         gap_loss_weight=config['training']['gap_loss_weight'],
         output_folder=output_folder,
-        print_predictions=config['training']['print_predictions']
+        print_predictions=config['training']['print_predictions'],
+        generate_temp=config['training']['generate_temp']
     )
     
     # Plot training and validation loss

@@ -2,7 +2,7 @@ from models.base_model import BaseModel
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils.quantize import MIDI_NOTES, DURATIONS, GAPS
+from project_utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
 # Inspired from https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
 
@@ -48,10 +48,10 @@ class CustomModelRNN(BaseModel):
         self.encoder.to(device)
         self.decoder.to(device)
 
-    def forward(self, x, target=None):            
+    def forward(self, x, target=None, generate_temp=1.0):            
         encoder_outputs, encoder_hidden = self.encoder(x)
-        decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions = self.decoder(encoder_outputs, encoder_hidden, target)
-        return decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions
+        decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions, decoded_notes, decoded_durations, decoded_gaps = self.decoder(encoder_outputs, encoder_hidden, target, generate_temp)
+        return decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions, decoded_notes, decoded_durations, decoded_gaps
 
 class EncoderRNN(nn.Module):
     def __init__(self, input_size, encoder_hidden_size, num_layers, embedding_dim, decoder_hidden_size, dropout_p=0.1):
@@ -105,7 +105,7 @@ class AttnDecoderRNN(nn.Module):
         self.SOS_token = SOS_token
         self.MAX_LENGTH = MAX_LENGTH
 
-    def forward(self, encoder_outputs, encoder_hidden, target_tensor=None):
+    def forward(self, encoder_outputs, encoder_hidden, target_tensor=None, temperature=1.0):
         batch_size = encoder_outputs.size(0)
         decoder_input = torch.zeros((batch_size, 3), dtype=torch.long, device=self.device).fill_(self.SOS_token)
         decoder_hidden = encoder_hidden
@@ -113,6 +113,9 @@ class AttnDecoderRNN(nn.Module):
         decoder_outputs_durations = []
         decoder_outputs_gaps = []
         attentions = []
+        decoded_notes = []
+        decoded_durations = []
+        decoded_gaps = []
 
         for i in range(self.MAX_LENGTH):
             decoder_output_note,decoder_output_duration, decoder_output_gap, decoder_hidden, attn_weights = self.forward_step(
@@ -128,24 +131,67 @@ class AttnDecoderRNN(nn.Module):
                 decoder_input = target_tensor[:, i] # Teacher forcing
             else:
                 # Without teacher forcing: use its own predictions as the next input
-                _, topi_note = decoder_output_note.topk(1)
-                _, topi_duration = decoder_output_duration.topk(1)
-                _, topi_gap = decoder_output_gap.topk(1)
-                decoder_input_note = topi_note.squeeze(-1).detach()  # detach from history as input
-                decoder_input_duration = topi_duration.squeeze(-1).detach()
-                decoder_input_gap = topi_gap.squeeze(-1).detach()
+                
+                # Apply temperature to the output 
+                decoder_output_note = decoder_output_note / temperature
+                decoder_output_duration = decoder_output_duration / temperature
+                decoder_output_gap = decoder_output_gap / temperature
+
+                # # Get topk
+                # _, decoder_output_note = decoder_output_note.topk(1)
+                # decoder_output_note = decoder_output_note.squeeze(-1).detach()
+                # _, decoder_output_duration = decoder_output_duration.topk(1)
+                # decoder_output_duration = decoder_output_duration.squeeze(-1).detach()
+                # _, decoder_output_gap = decoder_output_gap.topk(1)
+                # decoder_output_gap = decoder_output_gap.squeeze(-1).detach()
+
+                # Apply softmax to the output
+                probs_note = F.softmax(decoder_output_note, dim=-1)
+                probs_duration = F.softmax(decoder_output_duration, dim=-1)
+                probs_gap = F.softmax(decoder_output_gap, dim=-1)
+
+                # Sample from the output
+                note_next_tokens = torch.multinomial(probs_note.squeeze(1), 1)
+                duration_next_tokens = torch.multinomial(probs_duration.squeeze(1), 1)
+                gap_next_tokens = torch.multinomial(probs_gap.squeeze(1), 1)
+
+                # Compute next scores
+                note_scores = torch.gather(decoder_output_note.squeeze(1), -1, note_next_tokens)
+                duration_scores = torch.gather(decoder_output_duration.squeeze(1), -1, duration_next_tokens)
+                gap_scores = torch.gather(decoder_output_gap.squeeze(1), -1, gap_next_tokens)
+
+                note_scores, note_indices = note_scores.sort(descending=True, dim=1)
+                duration_scores, duration_indices = duration_scores.sort(descending=True, dim=1)
+                gap_scores, gap_indices = gap_scores.sort(descending=True, dim=1)
+
+                decoder_input_note = torch.gather(note_next_tokens, -1, note_indices)
+                decoder_input_duration = torch.gather(duration_next_tokens, -1, duration_indices)
+                decoder_input_gap = torch.gather(gap_next_tokens, -1, gap_indices)
+
+                decoded_notes.append(decoder_input_note)
+                decoded_durations.append(decoder_input_duration)
+                decoded_gaps.append(decoder_input_gap)
+
                 decoder_input = torch.cat((decoder_input_note, decoder_input_duration, decoder_input_gap), dim=-1)
 
         decoder_outputs_notes = torch.cat(decoder_outputs_notes, dim=1)
+        decoder_outputs_notes = decoder_outputs_notes / temperature
         decoder_outputs_notes = F.log_softmax(decoder_outputs_notes, dim=-1)
         decoder_outputs_durations = torch.cat(decoder_outputs_durations, dim=1)
+        decoder_outputs_durations = decoder_outputs_durations / temperature
         decoder_outputs_durations = F.log_softmax(decoder_outputs_durations, dim=-1)
         decoder_outputs_gaps = torch.cat(decoder_outputs_gaps, dim=1)
+        decoder_outputs_gaps = decoder_outputs_gaps / temperature
         decoder_outputs_gaps = F.log_softmax(decoder_outputs_gaps, dim=-1)
 
         attentions = torch.cat(attentions, dim=1)
 
-        return decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions
+        if target_tensor is None:
+            decoded_notes = torch.cat(decoded_notes, dim=1)
+            decoded_durations = torch.cat(decoded_durations, dim=1)
+            decoded_gaps = torch.cat(decoded_gaps, dim=1)
+
+        return decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions, decoded_notes, decoded_durations, decoded_gaps
 
 
     def forward_step(self, input, hidden, encoder_outputs):
@@ -173,4 +219,4 @@ class AttnDecoderRNN(nn.Module):
         out_note = self.out_note(torch.cat((output, weighted, embedded_note.squeeze(0)), dim=1))
         out_duration = self.out_duration(torch.cat((output, weighted, embedded_duration.squeeze(0)), dim=1))
         out_gap = self.out_gap(torch.cat((output, weighted, embedded_gap.squeeze(0)), dim=1))
-        return out_note.unsqueeze(1), out_duration.unsqueeze(1), out_gap.unsqueeze(1), hidden.squeeze(0), attn_weights.squeeze(1)   
+        return out_note.unsqueeze(1), out_duration.unsqueeze(1), out_gap.unsqueeze(1), hidden, attn_weights.squeeze(1)   
