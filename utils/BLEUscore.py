@@ -27,6 +27,8 @@ def bleu_score(candidate_corpus, references_corpus, max_n=4, weights=[0.25] * 4)
             0.8408964276313782
     """
 
+    if weights == None:
+        weights = [1/max_n]*max_n
     assert max_n == len(weights), 'Length of the "weights" list has be equal to max_n'
     assert len(candidate_corpus) == len(
         references_corpus
@@ -44,6 +46,8 @@ def bleu_score(candidate_corpus, references_corpus, max_n=4, weights=[0.25] * 4)
         candidate_len += current_candidate_len
 
         # Get the length of the reference that's closest in length to the candidate
+        if len(refs.shape) == 1:
+            refs = [refs]
         refs_len_list = [float(len(ref)) for ref in refs]
         refs_len += min(refs_len_list, key=lambda x: abs(current_candidate_len - x))
 

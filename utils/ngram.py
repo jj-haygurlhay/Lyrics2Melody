@@ -1,5 +1,5 @@
 import collections
-
+from collections import defaultdict
 def _get_ngrams(token_list, n):
         return zip(*[token_list[i:] for i in range(n)])
 
@@ -61,6 +61,24 @@ def _compute_ngram_counter(tokens, max_n):
 def ngram_repetition(token_list,n):
     return sum([x - 1 for x in count_ngrams(token_list,n).values()])
 
+def transitions(notes):
+    transitions = defaultdict(0)
+    for bigram, count in count_ngrams(notes, 2).items():
+        # transition = bigram[1] - bigram[0]
+        # if transitions in transitions.keys(): transitions[transition] += count
+        # else: transitions[transition] = count
+        transitions[bigram[1] - bigram[0]] += count
+    return transitions
+
+def average_transitions(transitions_maps):
+    average_transitions = defaultdict()
+    for transitions_map in transitions_maps:
+        for transition, count in transitions_map.items():
+            if transition in average_transitions.keys(): average_transitions[transition] += count
+            else: average_transitions[transition] = count
+    return average_transitions
+
+
 def test():
     pred = [[(1,1),(2,2),(3,3),(4,4),(1,1),(5,5)]]
     print(count_ngrams(pred[0],2))
@@ -70,3 +88,22 @@ def test():
 
 if __name__ =="__main__":
     test()
+
+class transition_map (defaultdict):
+    def __init__(self, notes):
+        super().__init__(int)
+        for bigram, count in count_ngrams(notes, 2).items():
+            # transition = bigram[1] - bigram[0]
+            # if transitions in transitions.keys(): transitions[transition] += count
+            # else: transitions[transition] = count
+            self[bigram[1] - bigram[0]] += count
+
+    def __add__(self, other_transition_map):
+        for transition, count in other_transition_map.items():
+            self[transition] += count
+        return self
+    
+    def __truediv__(self, n: int):
+        for transition, count in self.items():
+            self[transition] = count/n
+        return self
