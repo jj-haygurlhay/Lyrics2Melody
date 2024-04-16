@@ -17,6 +17,9 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import csv
 
+from project_utils.BLEUscore import bleu_score
+from project_utils.mmd import Compute_MMD
+
 
 HYPS_FILE = './config/hyps.yaml'
 EOS_token = 1
@@ -67,9 +70,48 @@ def train_epoch(dataloader, model, encoder_optimizer,
 
     return total_loss / len(dataloader)
 
+def get_bleu_scores(predicted, true):
+    score_1 = bleu_score(predicted, true, max_n=1, weights=[1.0])
+    score_2 = bleu_score(predicted, true, max_n=2, weights=[0.5, 0.5])
+    score_3 = bleu_score(predicted, true, max_n=3, weights=[0.33, 0.33, 0.33])
+    score_4 = bleu_score(predicted, true, max_n=4, weights=[0.25, 0.25, 0.25, 0.25])
+    score_5 = bleu_score(predicted, true, max_n=5, weights=[0.2, 0.2, 0.2, 0.2, 0.2])
+    return (score_1, score_2, score_3, score_4, score_5)
+
+def log_results(results, csv_writer):
+    csv_writer.writerow([
+        results['epoch'],
+        results['train_loss'],
+        results['val_loss'],
+        results['notes']['bleu'][0],
+        results['notes']['bleu'][1],
+        results['notes']['bleu'][2],
+        results['notes']['bleu'][3],
+        results['notes']['bleu'][4],
+        results['notes']['mmd'],
+        results['durations']['bleu'][0],
+        results['durations']['bleu'][1],
+        results['durations']['bleu'][2],
+        results['durations']['bleu'][3],
+        results['durations']['bleu'][4],
+        results['durations']['mmd'],
+        results['gaps']['bleu'][0],
+        results['gaps']['bleu'][1],
+        results['gaps']['bleu'][2],
+        results['gaps']['bleu'][3],
+        results['gaps']['bleu'][4],
+        results['gaps']['mmd']
+    ])
+
 def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions, generate_temp):
     with torch.no_grad():
         total_loss = 0
+        true_notes = []
+        true_durations = []
+        true_gaps = []
+        predicted_notes = []
+        predicted_durations = []
+        predicted_gaps = []
         progress_bar = tqdm(dataloader, desc=f"Validation: ")
         is_printed = False
         for data in progress_bar:
@@ -106,8 +148,48 @@ def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss
                 print(f"Predicted gaps: {decoded_gaps[0].cpu().numpy()}")
                 is_printed = True
             progress_bar.set_postfix({'Validation Loss': total_loss / len(dataloader)})
+            true_notes.extend(target_notes.cpu().numpy())
+            true_durations.extend(target_durations.cpu().numpy())
+            true_gaps.extend(target_gaps.cpu().numpy())
+            predicted_notes.extend(decoded_notes.cpu().numpy())
+            predicted_durations.extend(decoded_durations.cpu().numpy())
+            predicted_gaps.extend(decoded_gaps.cpu().numpy())
+        
+        # Convert to numpy arrays
+        predicted_notes = np.asarray(predicted_notes)
+        true_notes = np.asarray(true_notes)
+        predicted_durations = np.asarray(predicted_durations)
+        true_durations = np.asarray(true_durations)
+        predicted_gaps = np.asarray(predicted_gaps)
+        true_gaps = np.asarray(true_gaps)
 
-        return total_loss / len(dataloader)
+        # Compute BLEU scores
+        bleu_scores_notes     = get_bleu_scores(predicted_notes, true_notes)
+        bleu_scores_durations = get_bleu_scores(predicted_durations, true_durations)
+        bleu_scores_gaps      = get_bleu_scores(predicted_gaps, true_gaps)
+
+        # Compute MMD
+        mmd_notes     = Compute_MMD(predicted_notes, true_notes)
+        mmd_durations = Compute_MMD(predicted_durations, true_durations)
+        mmd_gaps      = Compute_MMD(predicted_gaps, true_gaps)
+
+        results = {
+            'notes': {
+                'bleu': bleu_scores_notes,
+                'mmd': mmd_notes
+            },
+            'durations': {
+                'bleu': bleu_scores_durations,
+                'mmd': mmd_durations
+            },
+            'gaps': {
+                'bleu': bleu_scores_gaps,
+                'mmd': mmd_gaps
+            },
+            'loss': total_loss / len(dataloader)
+        }
+
+        return results
 
 def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001, weight_decay=0.01,
                note_loss_weight=0.8, duration_loss_weight=0.2, gap_loss_weight=0.2, output_folder='/log', print_predictions=False, generate_temp=1.0):
@@ -118,11 +200,19 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
     criterion = nn.NLLLoss()
 
     csv_file = os.path.join(output_folder, 'training_log.csv')
+    # Keep track of lowest mmd
+    lowest_mmd = float('inf')
+    lowest_mmd_epoch = 0
 
     with open(csv_file, mode='w') as csv_file:
         csv_writer = csv.writer(csv_file)
 
-        csv_writer.writerow(['Epoch', 'Training Loss', 'Validation Loss'])
+        csv_writer.writerow(
+            ['Epoch', 'Training Loss', 'Validation Loss', 
+             'BLEU Notes 1', 'BLEU Notes 2', 'BLEU Notes 3', 'BLEU Notes 4', 'BLEU Notes 5', 'MMD Notes', 
+             'BLEU Durations 1', 'BLEU Durations 2', 'BLEU Durations 3', 'BLEU Durations 4', 'BLEU Durations 5', 'MMD Durations', 
+             'BLEU Gaps 1', 'BLEU Gaps 2', 'BLEU Gaps 3', 'BLEU Gaps 4', 'BLEU Gaps 5', 'MMD Gaps' ]
+             )
         for epoch in range(1, n_epochs + 1):
             model.train()
             loss = train_epoch(train_dataloader, model, encoder_optimizer, decoder_optimizer, criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight)
@@ -130,13 +220,23 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
             print(f"Epoch {epoch}, training Loss: {loss}")
 
             model.eval()
-            val_loss = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions, generate_temp)
-            val_losses.append(val_loss)
-            print(f"Epoch {epoch}, Validation Loss: {val_loss}")
+            val_results = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions, generate_temp)
+            val_losses.append(val_results['loss'])
+            print(f"Epoch {epoch}, Validation results: {val_results}")
+            val_results['val_loss'] = val_results['loss']
+            del val_results['loss']
+            val_results['train_loss'] = loss
+            val_results['epoch'] = epoch
 
-            csv_writer.writerow([epoch, loss, val_loss])
+            log_results(val_results, csv_writer)
             csv_file.flush()
-            
+
+            if val_results['notes']['mmd'] < lowest_mmd:
+                lowest_mmd = val_results['notes']['mmd']
+                lowest_mmd_epoch = epoch
+                torch.save(model.state_dict(), os.path.join(output_folder, f'model_best_mmd.pt'))
+        
+        print(f"\nLowest MMD: {lowest_mmd} at epoch {lowest_mmd_epoch}")
         return train_losses, val_losses
 
 def main():

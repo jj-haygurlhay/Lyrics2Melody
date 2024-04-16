@@ -44,6 +44,8 @@ def bleu_score(candidate_corpus, references_corpus, max_n=4, weights=[0.25] * 4)
         candidate_len += current_candidate_len
 
         # Get the length of the reference that's closest in length to the candidate
+        if len(refs.shape) == 1:
+            refs = [refs] 
         refs_len_list = [float(len(ref)) for ref in refs]
         refs_len += min(refs_len_list, key=lambda x: abs(current_candidate_len - x))
 
@@ -72,7 +74,6 @@ def bleu_score(candidate_corpus, references_corpus, max_n=4, weights=[0.25] * 4)
         bp = math.exp(min(1 - refs_len / candidate_len, 0))
 
         return bp * score.item()
-    
 
 def test():
     pred = [[(1,1),(2,2),(3,3),(4,4),(1,1),(5,5)]]
