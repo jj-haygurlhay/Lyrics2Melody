@@ -26,7 +26,7 @@ def grbf(x1, x2, sigma):
     
     return np.exp(-1.*h/(2.*pow(sigma,2)))
 
-def Compute_MMD(X,Y):
+def Compute_MMD(X,Y, results=None, i=0):
     '''
     TAKEN FROM https://github.com/yy1lab/Lyrics-Conditioned-Neural-Melody-Generation/blob/a966efb468673bd251f94d5715f13d0e1d0b02d5/mmd.py
     Compute MMD estimate
@@ -44,7 +44,8 @@ def Compute_MMD(X,Y):
     Kxxnd = Kxx - np.diag(np.diagonal(Kxx))
     u_xx = np.sum(Kxxnd) * (1. / (m * (m - 1)))
     MMDXY = u_xx + u_yy - 2. * u_xy
-
+    if results is not None:
+        results[i] = MMDXY
     return MMDXY
 
 def kernelwidthPair(x1, x2):

@@ -57,7 +57,7 @@ class EncoderRNN(nn.Module):
     def __init__(self, input_size, encoder_hidden_size, num_layers, embedding_dim, decoder_hidden_size, dropout_p=0.1):
         super(EncoderRNN, self).__init__()
         self.embedding = nn.Embedding(input_size, embedding_dim)
-        self.gru = nn.GRU(embedding_dim, encoder_hidden_size, num_layers=num_layers, bidirectional=True, batch_first=True)
+        self.gru = nn.GRU(embedding_dim, encoder_hidden_size, num_layers=num_layers, bidirectional=True, batch_first=True, dropout=dropout_p)
         self.fc = nn.Linear((encoder_hidden_size * 2) * num_layers, decoder_hidden_size * num_layers)
         self.dropout = nn.Dropout(dropout_p)
         self.decoder_hidden_size = decoder_hidden_size
@@ -96,7 +96,7 @@ class AttnDecoderRNN(nn.Module):
         super(AttnDecoderRNN, self).__init__()
         self.embedding = nn.Embedding(output_size_note + output_size_duration + output_size_gap, embedding_dim)
         self.attention = Attention(encoder_hidden_size, decoder_hidden_size)
-        self.gru = nn.GRU((encoder_hidden_size * 2) +  (3 * embedding_dim), decoder_hidden_size, num_layers=num_layers)
+        self.gru = nn.GRU((encoder_hidden_size * 2) +  (3 * embedding_dim), decoder_hidden_size, num_layers=num_layers, dropout=dropout_p)
         self.out_note = nn.Linear((encoder_hidden_size * 2) + decoder_hidden_size + embedding_dim, output_size_note)
         self.out_duration = nn.Linear((encoder_hidden_size * 2) + decoder_hidden_size + embedding_dim, output_size_duration)
         self.out_gap = nn.Linear((encoder_hidden_size * 2) + decoder_hidden_size + embedding_dim, output_size_gap)

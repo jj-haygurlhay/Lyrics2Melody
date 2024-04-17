@@ -7,7 +7,8 @@ from torch.utils.data import DataLoader
 from dataloader.collator import SongsCollator
 from dataloader.vocab import Lang
 from transformers import (
-    set_seed
+    set_seed,
+    get_linear_schedule_with_warmup
 )
 from dataloader import SongsDataset
 from models import CustomModelRNN
@@ -19,16 +20,18 @@ import csv
 
 from project_utils.BLEUscore import bleu_score
 from project_utils.mmd import Compute_MMD
-
+from threading import Thread
 
 HYPS_FILE = './config/hyps.yaml'
 EOS_token = 1
 SOS_token = 0
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+thread_list = []
 
 
-def train_epoch(dataloader, model, encoder_optimizer,
-          decoder_optimizer, criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight):
+def train_epoch(dataloader, model, encoder_optimizer, decoder_optimizer, 
+                encoder_lr_scheduler, decoder_lr_scheduler,
+                criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight):
 
     total_loss = 0
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}")
@@ -64,19 +67,17 @@ def train_epoch(dataloader, model, encoder_optimizer,
         encoder_optimizer.step()
         decoder_optimizer.step()
 
+        encoder_lr_scheduler.step()
+        decoder_lr_scheduler.step()
+
         total_loss += loss.item()
 
         progress_bar.set_postfix({'Training Loss': total_loss / len(dataloader)})
 
     return total_loss / len(dataloader)
 
-def get_bleu_scores(predicted, true):
-    score_1 = bleu_score(predicted, true, max_n=1, weights=[1.0])
-    score_2 = bleu_score(predicted, true, max_n=2, weights=[0.5, 0.5])
-    score_3 = bleu_score(predicted, true, max_n=3, weights=[0.33, 0.33, 0.33])
-    score_4 = bleu_score(predicted, true, max_n=4, weights=[0.25, 0.25, 0.25, 0.25])
-    score_5 = bleu_score(predicted, true, max_n=5, weights=[0.2, 0.2, 0.2, 0.2, 0.2])
-    return (score_1, score_2, score_3, score_4, score_5)
+def get_bleu_scores(predicted, true, results, i, ngram):
+    results[i] = bleu_score(predicted, true, max_n=ngram+1, weights=[1/(ngram+1)]*(ngram+1))
 
 def log_results(results, csv_writer):
     csv_writer.writerow([
@@ -163,33 +164,75 @@ def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss
         predicted_gaps = np.asarray(predicted_gaps)
         true_gaps = np.asarray(true_gaps)
 
-        # Compute BLEU scores
-        bleu_scores_notes     = get_bleu_scores(predicted_notes, true_notes)
-        bleu_scores_durations = get_bleu_scores(predicted_durations, true_durations)
-        bleu_scores_gaps      = get_bleu_scores(predicted_gaps, true_gaps)
+        return total_loss / len(dataloader), predicted_notes, predicted_durations, predicted_gaps, true_notes, true_durations, true_gaps
 
-        # Compute MMD
-        mmd_notes     = Compute_MMD(predicted_notes, true_notes)
-        mmd_durations = Compute_MMD(predicted_durations, true_durations)
-        mmd_gaps      = Compute_MMD(predicted_gaps, true_gaps)
+def log_scores(epoch, train_loss, val_loss, pred_notes, pred_durations, pred_gaps, true_notes, true_durations, true_gaps, csv_writer, csv_file=None):
+    # Compute BLEU scores
+    max_n = 2
+    results = [None] * (3*max_n + 3)
+    id = 0
+    for i in range(max_n):
+        thread = Thread(target=get_bleu_scores, args=(pred_notes, true_notes, results, id, i))
+        thread.start()
+        thread_list.append(thread)
+        id += 1
+    for i in range(max_n):
+        thread = Thread(target=get_bleu_scores, args=(pred_durations, true_durations, results, id, i))
+        thread.start()
+        thread_list.append(thread)
+        id += 1
+    for i in range(max_n):
+        thread = Thread(target=get_bleu_scores, args=(pred_gaps, true_gaps, results, id, i))
+        thread.start()
+        thread_list.append(thread)
+        id += 1
 
-        results = {
-            'notes': {
-                'bleu': bleu_scores_notes,
-                'mmd': mmd_notes
-            },
-            'durations': {
-                'bleu': bleu_scores_durations,
-                'mmd': mmd_durations
-            },
-            'gaps': {
-                'bleu': bleu_scores_gaps,
-                'mmd': mmd_gaps
-            },
-            'loss': total_loss / len(dataloader)
-        }
+    # Compute MMD
+    thread = Thread(target=Compute_MMD, args=(pred_notes, true_notes, results, id))
+    thread.start()
+    thread_list.append(thread)
+    id += 1
+    thread = Thread(target=Compute_MMD, args=(pred_durations, true_durations, results, id))
+    thread.start()
+    thread_list.append(thread)
+    id += 1
+    thread = Thread(target=Compute_MMD, args=(pred_gaps, true_gaps, results, id))
+    thread.start()
+    thread_list.append(thread)
 
-        return results
+
+    # Retrieve results
+    for thread in thread_list:
+        thread.join()
+    thread_list.clear()
+
+    bleu_scores_notes = results[:max_n]
+    bleu_scores_durations = results[max_n:2*max_n]
+    bleu_scores_gaps = results[2*max_n:3*max_n]
+    mmd_notes = results[3*max_n]
+    mmd_durations = results[3*max_n + 1]
+    mmd_gaps = results[3*max_n + 2]
+
+    val_results = {
+        'epoch': epoch,
+        'train_loss': train_loss,
+        'val_loss': val_loss,
+        'notes': {
+            'bleu': bleu_scores_notes + (5 - max_n) * [0],
+            'mmd': mmd_notes
+        },
+        'durations': {
+            'bleu': bleu_scores_durations + (5 - max_n) * [0],
+            'mmd': mmd_durations
+        },
+        'gaps': {
+            'bleu': bleu_scores_gaps + (5 - max_n) * [0],
+            'mmd': mmd_gaps
+        },
+    }
+    print(val_results)
+    log_results(val_results, csv_writer)
+    csv_file.flush()
 
 def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001, weight_decay=0.01,
                note_loss_weight=0.8, duration_loss_weight=0.2, gap_loss_weight=0.2, output_folder='/log', print_predictions=False, generate_temp=1.0):
@@ -197,6 +240,8 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
 
     encoder_optimizer = AdamW(model.encoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
     decoder_optimizer = AdamW(model.decoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
+    encoder_lr_scheduler = get_linear_schedule_with_warmup(encoder_optimizer, num_warmup_steps=0, num_training_steps=len(train_dataloader) * n_epochs)
+    decoder_lr_scheduler = get_linear_schedule_with_warmup(decoder_optimizer, num_warmup_steps=0, num_training_steps=len(train_dataloader) * n_epochs)
     criterion = nn.NLLLoss()
 
     csv_file = os.path.join(output_folder, 'training_log.csv')
@@ -215,29 +260,26 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
              )
         for epoch in range(1, n_epochs + 1):
             model.train()
-            loss = train_epoch(train_dataloader, model, encoder_optimizer, decoder_optimizer, criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight)
+            loss = train_epoch(train_dataloader, model, encoder_optimizer, decoder_optimizer, encoder_lr_scheduler, decoder_lr_scheduler, criterion, epoch, note_loss_weight, duration_loss_weight, gap_loss_weight)
             train_losses.append(loss)
-            print(f"Epoch {epoch}, training Loss: {loss}")
+            print(f"Epoch {epoch}, Training Loss: {loss}")
 
             model.eval()
-            val_results = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions, generate_temp)
-            val_losses.append(val_results['loss'])
-            print(f"Epoch {epoch}, Validation results: {val_results}")
-            val_results['val_loss'] = val_results['loss']
-            del val_results['loss']
-            val_results['train_loss'] = loss
-            val_results['epoch'] = epoch
+            val_loss, pred_notes, pred_durations, pred_gaps, true_notes, true_durations, true_gaps = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions, generate_temp)
+            val_losses.append(val_loss)
+            print(f"Epoch {epoch}, Validation Loss: {val_loss}")
 
-            log_results(val_results, csv_writer)
-            csv_file.flush()
+            thread = Thread(target=log_scores, args=(epoch, loss, val_loss, pred_notes, pred_durations, pred_gaps, true_notes, true_durations, true_gaps, csv_writer, csv_file))
+            thread.start()
+            mmd_notes = Compute_MMD(pred_notes, true_notes)
 
-            if val_results['notes']['mmd'] < lowest_mmd:
-                lowest_mmd = val_results['notes']['mmd']
+            if mmd_notes < lowest_mmd:
+                lowest_mmd = mmd_notes
                 lowest_mmd_epoch = epoch
                 torch.save(model.state_dict(), os.path.join(output_folder, f'model_best_mmd.pt'))
-        
+        thread.join()
         print(f"\nLowest MMD: {lowest_mmd} at epoch {lowest_mmd_epoch}")
-        return train_losses, val_losses
+    return train_losses, val_losses
 
 def main():
     with open(HYPS_FILE, "r") as f:

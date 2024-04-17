@@ -11,7 +11,7 @@ from midi2audio import FluidSynth
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model_dir = './runs/RNN/2024-04-15_20-35-55/' # Change this to the path of the model you want to use
+model_dir = './runs/RNN/2024-04-17_12-19-52/' # Change this to the path of the model you want to use
 temperature = 0.6
 
 model_path = os.path.join(model_dir, 'model_best_mmd.pt')
