@@ -1,24 +1,24 @@
 model:
   model_name: 't5-small'
-  dropout: 0.3
-  expansion_factor: 4
-  num_layers: 6
+  dropout: 0.5
+  expansion_factor: 1
+  num_layers: 2
   num_heads: 8
 
 training:
-  batch_size: 352
+  batch_size: 512
   epochs: 50
-  lr: 1e-4
-  weight_decay: 0
+  lr: 1e-5
+  weight_decay: 0.01
   train_encoder: False
-  note_loss_weight: 1.0
-  duration_loss_weight: 1.0
-  gap_loss_weight: 1.0
+  note_loss_weight: 0.6
+  duration_loss_weight: 0.3
+  gap_loss_weight: 0.1
 
 
 data:
-  data_dir: './data/new_dataset'
-  max_sequence_length: 20
+  data_dir: './data/new_dataset_length20'
+  max_sequence_length: 50
   output_eos: 1
   use_syllables: False
 

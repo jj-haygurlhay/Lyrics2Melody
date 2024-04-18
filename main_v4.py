@@ -57,7 +57,6 @@ def train_epoch(dataloader, model, encoder_optimizer,
 
     total_loss = 0
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}")
-    print_data = True
 
     for data in progress_bar:
         input_tensor = data['input_ids'].to(device)
@@ -80,18 +79,6 @@ def train_epoch(dataloader, model, encoder_optimizer,
         loss_gaps = criterion(decoder_outputs_gaps.transpose(1, 2), target_gaps[:, 1:])
         loss = note_loss_weight * loss_notes + duration_loss_weight * loss_durations + gap_loss_weight * loss_gaps
 
-        if print_data:
-            print_data = False
-            # Compute notes
-            notes = torch.argmax(decoder_outputs_notes[0], dim=-1).cpu().numpy()
-            durations = torch.argmax(decoder_outputs_durations[0], dim=-1).cpu().numpy()
-            gaps = torch.argmax(decoder_outputs_gaps[0], dim=-1).cpu().numpy()
-            print('Notes:', notes[:20])
-            print('Target Notes', target_notes[0, 1:21].cpu().numpy())
-            print('\nDurations:', durations[:20])
-            print('Target Durations', target_durations[0, 1:21].cpu().numpy())
-            print('\nGaps:', gaps[:20])
-            print('Target Gaps', target_gaps[0, 1:21].cpu().numpy())
         loss.backward()
 
         if encoder_optimizer is not None:
@@ -142,7 +129,7 @@ def evaluate_model(model, dataloader, criterion, note_loss_weight, duration_loss
             target_notes = data['labels']['notes'].to(device)
             target_durations = data['labels']['durations'].to(device)
             target_gaps = data['labels']['gaps'].to(device)
-            decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, logits_notes, logits_durations, logits_gaps = model.generate(input_tensor, attn_mask)
+            decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, logits_notes, logits_durations, logits_gaps = model.generate(input_tensor, attn_mask, temperature=0.6)
 
             loss_notes     = criterion(logits_notes.transpose(1, 2), target_notes[:, 1:])
             loss_durations = criterion(logits_durations.transpose(1, 2), target_durations[:, 1:])
