@@ -48,9 +48,9 @@ class CustomModelRNN(BaseModel):
         self.encoder.to(device)
         self.decoder.to(device)
 
-    def forward(self, x, target=None, generate_temp=1.0):            
+    def forward(self, x, target=None, generate_temp=1.0, topk=None):            
         encoder_outputs, encoder_hidden = self.encoder(x)
-        decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions, decoded_notes, decoded_durations, decoded_gaps = self.decoder(encoder_outputs, encoder_hidden, target, generate_temp)
+        decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions, decoded_notes, decoded_durations, decoded_gaps = self.decoder(encoder_outputs, encoder_hidden, target, generate_temp, topk)
         return decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions, decoded_notes, decoded_durations, decoded_gaps
 
 class EncoderRNN(nn.Module):
@@ -105,7 +105,7 @@ class AttnDecoderRNN(nn.Module):
         self.SOS_token = SOS_token
         self.MAX_LENGTH = MAX_LENGTH
 
-    def forward(self, encoder_outputs, encoder_hidden, target_tensor=None, temperature=1.0):
+    def forward(self, encoder_outputs, encoder_hidden, target_tensor=None, temperature=1.0, topk=None):
         batch_size = encoder_outputs.size(0)
         decoder_input = torch.zeros((batch_size, 3), dtype=torch.long, device=self.device).fill_(self.SOS_token)
         decoder_hidden = encoder_hidden
@@ -133,17 +133,18 @@ class AttnDecoderRNN(nn.Module):
                 # Without teacher forcing: use its own predictions as the next input
                 
                 # Apply temperature to the output 
-                decoder_output_note = decoder_output_note / temperature
-                decoder_output_duration = decoder_output_duration / temperature
-                decoder_output_gap = decoder_output_gap / temperature
+                decoder_output_note = decoder_output_note[:, -1, :] / temperature
+                decoder_output_duration = decoder_output_duration[:, -1, :] / temperature
+                decoder_output_gap = decoder_output_gap[:, -1, :] / temperature
 
-                # # Get topk
-                # _, decoder_output_note = decoder_output_note.topk(1)
-                # decoder_output_note = decoder_output_note.squeeze(-1).detach()
-                # _, decoder_output_duration = decoder_output_duration.topk(1)
-                # decoder_output_duration = decoder_output_duration.squeeze(-1).detach()
-                # _, decoder_output_gap = decoder_output_gap.topk(1)
-                # decoder_output_gap = decoder_output_gap.squeeze(-1).detach()
+                # Get topk
+                if topk is not None:
+                    topk_note, _ = torch.topk(decoder_output_note, topk)
+                    topk_duration, _ = torch.topk(decoder_output_duration, topk)
+                    topk_gap, _ = torch.topk(decoder_output_gap, topk)
+                    decoder_output_note[decoder_output_note < topk_note[:, [-1]]] = -float('Inf')
+                    decoder_output_duration[decoder_output_duration < topk_duration[:, [-1]]] = -float('Inf')
+                    decoder_output_gap[decoder_output_gap < topk_gap[:, [-1]]] = -float('Inf')
 
                 # Apply softmax to the output
                 probs_note = F.softmax(decoder_output_note, dim=-1)

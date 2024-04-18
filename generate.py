@@ -11,8 +11,9 @@ from midi2audio import FluidSynth
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model_dir = './runs/RNN/2024-04-17_12-19-52/' # Change this to the path of the model you want to use
-temperature = 0.6
+model_dir = './runs/RNN/curr_best/' # Change this to the path of the model you want to use
+topk = 10
+temperature = 0.8
 
 model_path = os.path.join(model_dir, 'model_best_mmd.pt')
 config_path = os.path.join(model_dir, 'config.yaml')
@@ -58,7 +59,7 @@ text = "A ru ba Ja maic a ooo I wan na take you Ber mu da Ba ha ma come on pret 
 inputs = [serialize_lyrics(text, max_length, syllables, 1)]
 input_tensor = torch.tensor(inputs).to(device)
 
-decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _, decoded_notes, decoded_durations, decoded_gaps = model(input_tensor, generate_temp=temperature)
+decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _, _, decoded_notes, decoded_durations, decoded_gaps = model(input_tensor, generate_temp=temperature, topk=topk)
 
 def decode_midi_sequence(decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps):
     sequence = []

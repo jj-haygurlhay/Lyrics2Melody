@@ -1,18 +1,18 @@
 model:
   dropout: 0.5
-  encoder_hidden_size: 256
-  decoder_hidden_size: 256
+  encoder_hidden_size: 400
+  decoder_hidden_size: 400
   embedding_dim: 128
-  num_layers: 2
+  num_layers: 1
 
 training:
-  batch_size: 2048
-  epochs: 100
+  batch_size: 1024
+  epochs: 200
   lr: 1e-5
   weight_decay: 0.01
-  note_loss_weight: 0.5
+  note_loss_weight: 0.6
   duration_loss_weight: 0.3
-  gap_loss_weight: 0.2
+  gap_loss_weight: 0.1
   print_predictions: False # print first eval predictions during training
   generate_temp: 0.6
 
