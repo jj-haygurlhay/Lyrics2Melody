@@ -192,7 +192,14 @@ class AttnDecoderRNN(nn.Module):
             decoded_durations = torch.cat(decoded_durations, dim=1)
             decoded_gaps = torch.cat(decoded_gaps, dim=1)
 
-        return decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, decoder_hidden, attentions, decoded_notes, decoded_durations, decoded_gaps
+        return (decoder_outputs_notes, 
+                decoder_outputs_durations, 
+                decoder_outputs_gaps, 
+                decoder_hidden, 
+                attentions, 
+                decoded_notes, 
+                decoded_durations, 
+                decoded_gaps)
 
 
     def forward_step(self, input, hidden, encoder_outputs):
