@@ -242,13 +242,13 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
     decoder_optimizer = AdamW(model.decoder.parameters(), lr=float(learning_rate), weight_decay=weight_decay)
     encoder_lr_scheduler = get_linear_schedule_with_warmup(encoder_optimizer, num_warmup_steps=0, num_training_steps=len(train_dataloader) * n_epochs)
     decoder_lr_scheduler = get_linear_schedule_with_warmup(decoder_optimizer, num_warmup_steps=0, num_training_steps=len(train_dataloader) * n_epochs)
-    criterion = nn.NLLLoss()
+    criterion = nn.CrossEntropyLoss()
 
     csv_file = os.path.join(output_folder, 'training_log.csv')
     # Keep track of lowest mmd
     lowest_mmd = float('inf')
     lowest_mmd_epoch = 0
-
+    thread = None
     with open(csv_file, mode='w') as csv_file:
         csv_writer = csv.writer(csv_file)
 
@@ -268,7 +268,8 @@ def train(train_dataloader, val_dataloader, model, n_epochs, learning_rate=0.001
             val_loss, pred_notes, pred_durations, pred_gaps, true_notes, true_durations, true_gaps = evaluate_model(model, val_dataloader, criterion, note_loss_weight, duration_loss_weight, gap_loss_weight, print_predictions, generate_temp)
             val_losses.append(val_loss)
             print(f"Epoch {epoch}, Validation Loss: {val_loss}")
-
+            if thread is not None:
+                thread.join()
             thread = Thread(target=log_scores, args=(epoch, loss, val_loss, pred_notes, pred_durations, pred_gaps, true_notes, true_durations, true_gaps, csv_writer, csv_file))
             thread.start()
             mmd_notes = Compute_MMD(pred_notes, true_notes)

@@ -176,14 +176,8 @@ class AttnDecoderRNN(nn.Module):
                 decoder_input = torch.cat((decoder_input_note, decoder_input_duration, decoder_input_gap), dim=-1)
 
         decoder_outputs_notes = torch.cat(decoder_outputs_notes, dim=1)
-        decoder_outputs_notes = decoder_outputs_notes / temperature
-        decoder_outputs_notes = F.log_softmax(decoder_outputs_notes, dim=-1)
         decoder_outputs_durations = torch.cat(decoder_outputs_durations, dim=1)
-        decoder_outputs_durations = decoder_outputs_durations / temperature
-        decoder_outputs_durations = F.log_softmax(decoder_outputs_durations, dim=-1)
         decoder_outputs_gaps = torch.cat(decoder_outputs_gaps, dim=1)
-        decoder_outputs_gaps = decoder_outputs_gaps / temperature
-        decoder_outputs_gaps = F.log_softmax(decoder_outputs_gaps, dim=-1)
 
         attentions = torch.cat(attentions, dim=1)
 
