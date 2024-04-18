@@ -139,9 +139,9 @@ class AttnDecoderRNN(nn.Module):
 
                 # Get topk
                 if topk is not None:
-                    topk_note, _ = torch.topk(decoder_output_note, topk)
-                    topk_duration, _ = torch.topk(decoder_output_duration, topk)
-                    topk_gap, _ = torch.topk(decoder_output_gap, topk)
+                    topk_note, _ = torch.topk(decoder_output_note, topk[0])
+                    topk_duration, _ = torch.topk(decoder_output_duration, topk[1])
+                    topk_gap, _ = torch.topk(decoder_output_gap, topk[2])
                     decoder_output_note[decoder_output_note < topk_note[:, [-1]]] = -float('Inf')
                     decoder_output_duration[decoder_output_duration < topk_duration[:, [-1]]] = -float('Inf')
                     decoder_output_gap[decoder_output_gap < topk_gap[:, [-1]]] = -float('Inf')
