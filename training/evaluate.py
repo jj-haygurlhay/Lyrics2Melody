@@ -38,23 +38,26 @@ class Evaluator:
             id += 1
 
         # Compute MMD
-        note_mmd_id = id
+        self.get_mmd(pred_notes, true_notes, id, 'Notes')
+        note_mmd = self.results[id]
         id += 1
-        thread = Thread(target=Compute_MMD, args=(pred_durations, true_durations, self.results, id))
+        thread = Thread(target=self.get_mmd, args=(pred_durations, true_durations, id, 'Durations'))
         thread.start()
         self.thread_list.append(thread)
         id += 1
-        thread = Thread(target=Compute_MMD, args=(pred_gaps, true_gaps, self.results, id))
+        thread = Thread(target=self.get_mmd, args=(pred_gaps, true_gaps, id, 'Gaps'))
         thread.start()
         self.thread_list.append(thread)
-
-        # Compute node MMD on main thread to return result
-        note_mmd = Compute_MMD(pred_notes, pred_durations, self.results, note_mmd_id)
+        
         return note_mmd
     
     def get_bleu_scores(self, predicted, true, i, ngram, name):
         self.results[i] = bleu_score(predicted, true, max_n=ngram+1, weights=[1/(ngram+1)]*(ngram+1))
-        self.logger.log_metric(f'BLEU_{name}-{ngram+1}', self.results[i], self.epoch)
+        self.logger.log_metric(f'BLEU/BLEU_{name}-{ngram+1}', self.results[i], self.epoch)
+
+    def get_mmd(self, predicted, true, i, name):
+        self.results[i] = Compute_MMD(predicted, true)
+        self.logger.log_metric(f'MMD/MMD_{name}', self.results[i], self.epoch)
 
     def retrieve_results(self):
         if len(self.thread_list) > 0:
@@ -84,6 +87,8 @@ class Evaluator:
                     'mmd': mmd_gaps
                 },
             }
+            self.logger.log_metric('Loss/Train', self.train_loss, self.epoch)
+            self.logger.log_metric('Loss/Validation', self.val_loss, self.epoch)
             self.logger.log_results(val_results)
             print(val_results)
 

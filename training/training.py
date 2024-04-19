@@ -38,7 +38,6 @@ class Trainer:
         self.generate_temp = hparams['generate_temp']
 
         self.logger = Logger(self.out_dir)
-        self.logger.add_hparams(hparams)
 
         self.evaluator = Evaluator(self.logger)
 
