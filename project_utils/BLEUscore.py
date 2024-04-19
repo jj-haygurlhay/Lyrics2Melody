@@ -2,7 +2,7 @@ import math
 import torch
 
 from .ngram import _compute_ngram_counter
-def bleu_score(candidate_corpus, references_corpus, max_n=4, weights=[0.25] * 4):
+def bleu_score(candidate_corpus, references_corpus, max_n=4, weights=None):
     """MODIFIED VERSION OF torchtext.data.metrics
 
     Modified to work with our data.
@@ -27,6 +27,8 @@ def bleu_score(candidate_corpus, references_corpus, max_n=4, weights=[0.25] * 4)
             0.8408964276313782
     """
 
+    if weights is None:
+        weights = [1/max_n]*max_n
     assert max_n == len(weights), 'Length of the "weights" list has be equal to max_n'
     assert len(candidate_corpus) == len(
         references_corpus
@@ -44,8 +46,8 @@ def bleu_score(candidate_corpus, references_corpus, max_n=4, weights=[0.25] * 4)
         candidate_len += current_candidate_len
 
         # Get the length of the reference that's closest in length to the candidate
-        if len(refs.shape) == 1:
-            refs = [refs] 
+        # if len(refs.shape) == 1:
+        #     refs = [refs]
         refs_len_list = [float(len(ref)) for ref in refs]
         refs_len += min(refs_len_list, key=lambda x: abs(current_candidate_len - x))
 
@@ -74,6 +76,7 @@ def bleu_score(candidate_corpus, references_corpus, max_n=4, weights=[0.25] * 4)
         bp = math.exp(min(1 - refs_len / candidate_len, 0))
 
         return bp * score.item()
+    
 
 def test():
     pred = [[(1,1),(2,2),(3,3),(4,4),(1,1),(5,5)]]
