@@ -12,7 +12,7 @@ import pandas as pd
 # from utils import decode_note, decode_duration, decode_gap
 import torch
 import numpy as np
-from utils.ngram import ngram_repetition, count_ngrams, transitions_map, average_transitions_map, transition_map_old, transitions
+from utils.ngram import ngram_repetition, count_ngrams, transitions
 from utils.BLEUscore import bleu_score
 from utils.mmd import Compute_MMD as mmd
 import json
@@ -31,6 +31,19 @@ def restless(gaps): return count_ngrams(gaps, 1)[(0.0,)]
 def avg_rest(gaps): return np.average(gaps)
 def song_len(durations, gaps): return sum(durations)+sum(gaps)
 def scale_diff(notes, durations): return find_closest_fit(notes, durations, ALL_SCALES)[1]
+def distribution(vals):
+    distribution = defaultdict(int)
+    for val in vals:
+        distribution[val] +=1
+    return distribution
+def transition_distribution(vals):
+    return distribution(transitions(vals))
+def average_distribution(distributions):
+    avg_distribution = defaultdict(int)
+    for distribution in distributions:
+        for val, count in distribution.items():
+            avg_distribution[val] += count/len(distributions)
+    return avg_distribution
 def bleu2_trans(vals, ref_vals): return bleu_score([transitions(vals)], [[transitions(ref_vals)]], max_n=2)
 def bleu3_trans(vals, ref_vals): return bleu_score([transitions(vals)], [[transitions(ref_vals)]], max_n=3)
 def bleu4_trans(vals, ref_vals): return bleu_score([transitions(vals)], [[transitions(ref_vals)]], max_n=4)
@@ -108,9 +121,8 @@ class analyser:
             self.individual_results["avg_rest"] = p.map(avg_rest, self.gaps)
             self.individual_results["song_len"] = p.starmap(song_len, zip(self.durations, self.gaps))
             self.individual_results["scale_diff"] = p.starmap(scale_diff, zip(self.notes, self.durations))
-            self.individual_results["transitions"] = p.map(transitions_map, self.notes)
-            # self.individual_results["mmd_notes"] = p.starmap(mmd, zip(self.notes, self.ref_notes))
-            # self.individual_results["transitions_test"] = p.map(transition_map, self.notes)
+            self.individual_results["transitions"] = p.map(transition_distribution, self.notes)
+            self.individual_results["distribution_notes"] = p.map(distribution, self.notes)
             self.individual_results["bleu2_notes"] = p.starmap(bleu2_trans, zip(self.notes, self.ref_notes))
             self.individual_results["bleu3_notes"] = p.starmap(bleu3_trans, zip(self.notes, self.ref_notes))
             self.individual_results["bleu4_notes"] = p.starmap(bleu4_trans, zip(self.notes, self.ref_notes))
@@ -131,9 +143,8 @@ class analyser:
         self.average_results["avg_rest"] = np.average(self.individual_results["avg_rest"])
         self.average_results["song_len"] = np.average(self.individual_results["song_len"])
         self.average_results["scale_diff"] = np.average(self.individual_results["scale_diff"])
-        self.average_results["transitions"] = average_transitions_map(self.individual_results["transitions"])
-        # self.average_results["mmd_notes"] = np.average(self.individual_results["mmd_notes"])
-        # self.average_results["transitions_test"] = transition_map.average(self.individual_results["transitions_test"])
+        self.average_results["transitions"] = average_distribution(self.individual_results["transitions"])
+        self.average_results["distribution_notes"] = average_distribution(self.individual_results["distribution_notes"])
         self.average_results["bleu2_notes"] = np.average(self.individual_results["bleu2_notes"])
         self.average_results["bleu3_notes"] = np.average(self.individual_results["bleu3_notes"])
         self.average_results["bleu4_notes"] = np.average(self.individual_results["bleu4_notes"])
@@ -193,8 +204,8 @@ class analyser:
             self.individual_references["avg_rest"] = p.map(avg_rest, self.ref_gaps)
             self.individual_references["song_len"] = p.starmap(song_len, zip(self.ref_durations, self.ref_gaps))
             self.individual_references["scale_diff"] = p.starmap(scale_diff, zip(self.ref_notes, self.ref_durations))
-            self.individual_references["transitions"] = p.map(transitions_map, self.ref_notes)
-            # self.individual_references["transitions_test"] = p.map(lambda note: transition_map(note), self.ref_notes)
+            self.individual_references["transitions"] = p.map(transition_distribution, self.ref_notes)
+            self.individual_references["distribution_notes"] = p.map(distribution, self.notes)
 
         # Average of reference songs
         self.average_references["span"] = np.average(self.individual_references["span"])
@@ -206,7 +217,8 @@ class analyser:
         self.average_references["avg_rest"] = np.average(self.individual_references["avg_rest"])
         self.average_references["song_len"] = np.average(self.individual_references["song_len"])
         self.average_references["scale_diff"] = np.average(self.individual_references["scale_diff"])
-        self.average_references["transitions"] = average_transitions_map(self.individual_references["transitions"])
+        self.average_references["transitions"] = average_distribution(self.individual_references["transitions"])
+        self.average_references["distribution_notes"] = average_distribution(self.individual_references["distribution_notes"])
         # self.average_references["transitions_test"] = transition_map.average(self.individual_references["transitions_test"])
         
         return self.average_references

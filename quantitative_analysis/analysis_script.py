@@ -24,8 +24,8 @@ gen_stats = analyser.analyse_multi()
 ref_stats = analyser.references_multi()
 
 with open("quantitative_analysis/lstm-gan_stats/gen_stats", "w") as f:
-    json.dump(gen_stats, f)
+    json.dump(gen_stats, f, indent=4)
 with open("quantitative_analysis/lstm-gan_stats/ref_stats", "w") as f:
-    json.dump(ref_stats, f)
+    json.dump(ref_stats, f, indent=4)
 # with open("quantitative_analysis/lstm-gan_stats/analyser", "w") as f:
 #     json.dump(analyser, f, cls=Analyser.Encoder, indent=4)
