@@ -62,6 +62,9 @@ def ngram_repetition(token_list,n):
     return sum([x - 1 for x in count_ngrams(token_list,n).values()])
 
 def transitions(notes):
+    return [bigram[1]-bigram[0] for bigram in _get_ngrams(notes, 2)]
+
+def transitions_map(notes):
     transitions = defaultdict(int)
     for bigram, count in count_ngrams(notes, 2).items():
         # transition = bigram[1] - bigram[0]
@@ -70,7 +73,7 @@ def transitions(notes):
         transitions[bigram[1] - bigram[0]] += count
     return transitions
 
-def average_transitions(transitions_maps):
+def average_transitions_map(transitions_maps):
     average_transitions = defaultdict(int)
     for transitions_map in transitions_maps:
         for transition, count in transitions_map.items():
@@ -89,7 +92,7 @@ def test():
 if __name__ =="__main__":
     test()
 
-class transition_map (defaultdict):
+class transition_map_old (defaultdict):
     def __init__(self, notes):
         super().__init__(int)
         for bigram, count in count_ngrams(notes, 2).items():

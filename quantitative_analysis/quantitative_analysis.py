@@ -12,16 +12,15 @@ import pandas as pd
 # from utils import decode_note, decode_duration, decode_gap
 import torch
 import numpy as np
-from utils.ngram import ngram_repetition, count_ngrams, transitions, average_transitions, transition_map
+from utils.ngram import ngram_repetition, count_ngrams, transitions_map, average_transitions_map, transition_map_old, transitions
 from utils.BLEUscore import bleu_score
+from utils.mmd import Compute_MMD as mmd
 import json
-from utils.scale import scale, find_closest_fit
+from utils.scale import scale, find_closest_fit, ALL_SCALES
 from collections import defaultdict
 from multiprocessing import Pool
 from statistics import mean
 # from inference import decode_midi_sequence
-
-SCALES = [scale(scale.MAJOR_SCALE, i) for i in range(12)] + [scale(scale.MINOR_SCALE, i) for i in range(12)]
 
 def span(notes): return max(notes) - min(notes)
 def rep2(notes): return ngram_repetition(notes, 2)
@@ -31,11 +30,16 @@ def unique(notes): return len(count_ngrams(notes, 1).keys())
 def restless(gaps): return count_ngrams(gaps, 1)[(0.0,)]
 def avg_rest(gaps): return np.average(gaps)
 def song_len(durations, gaps): return sum(durations)+sum(gaps)
-def scale_diff(notes, durations): return find_closest_fit(notes, durations, SCALES)[1]
-def bleu2(notes, ref_notes): return bleu_score([notes], [[ref_notes]], max_n=2)
-def bleu3(notes, ref_notes): return bleu_score([notes], [[ref_notes]], max_n=3)
-def bleu4(notes, ref_notes): return bleu_score([notes], [[ref_notes]], max_n=4)
-def transition_map_func(type : type, notes): return type(notes)
+def scale_diff(notes, durations): return find_closest_fit(notes, durations, ALL_SCALES)[1]
+def bleu2_trans(vals, ref_vals): return bleu_score([transitions(vals)], [[transitions(ref_vals)]], max_n=2)
+def bleu3_trans(vals, ref_vals): return bleu_score([transitions(vals)], [[transitions(ref_vals)]], max_n=3)
+def bleu4_trans(vals, ref_vals): return bleu_score([transitions(vals)], [[transitions(ref_vals)]], max_n=4)
+def bleu2(vals, ref_vals): return bleu_score([vals], [[ref_vals]], max_n=2)
+def bleu3(vals, ref_vals): return bleu_score([vals], [[ref_vals]], max_n=3)
+def bleu4(vals, ref_vals): return bleu_score([vals], [[ref_vals]], max_n=4)
+# def ndg_bleu2(notes, ref_notes,durations, ref_durations,gaps, ref_gaps): return (bleu_score([transitions(notes)], [[transitions(ref_notes)]], max_n=2) + bleu_score([durations], [[ref_durations]], max_n=2) + bleu_score([gaps], [[ref_gaps]], max_n=2))/3
+# def ndg_bleu3(notes, ref_notes,durations, ref_durations,gaps, ref_gaps): return (bleu_score([transitions(notes)], [[transitions(ref_notes)]], max_n=3) + bleu_score([durations], [[ref_durations]], max_n=3) + bleu_score([gaps], [[ref_gaps]], max_n=3))/3
+# def ndg_bleu4(notes, ref_notes,durations, ref_durations,gaps, ref_gaps): return (bleu_score([transitions(notes)], [[transitions(ref_notes)]], max_n=4) + bleu_score([durations], [[ref_durations]], max_n=4) + bleu_score([gaps], [[ref_gaps]], max_n=4))/3
 
 
 class analyser:
@@ -57,6 +61,7 @@ class analyser:
         self.average_references = dict()
         
     def analyse(self):
+        """DEPRECATED"""
         # Individual songs generated
         for lyric, note, duration, gap, ref_note, ref_duration, ref_gap in zip(self.lyrics, self.notes, self.durations, self.gaps, self.ref_notes, self.ref_durations, self.ref_gaps):
             self.individual_results["span"] += [max(note) - min(note)]
@@ -67,8 +72,8 @@ class analyser:
             self.individual_results["restless"] += [count_ngrams(gap,1)[(0.0,)]]
             self.individual_results["avg_rest"] += [np.average(gap)]
             self.individual_results["song_len"] += [sum(duration)+ sum(gap)]
-            self.individual_results["scale_diff"] += [find_closest_fit(note, duration, SCALES)[1]]
-            self.individual_results["transitions"] += [transitions(note)]
+            self.individual_results["scale_diff"] += [find_closest_fit(note, duration, ALL_SCALES)[1]]
+            self.individual_results["transitions"] += [transitions_map(note)]
             # self.individual_results["transitions_test"] += [transition_map(note)]
             self.individual_results["bleu2"] += [bleu_score([note], [[ref_note]], max_n=2)]
             self.individual_results["bleu3"] += [bleu_score([note], [[ref_note]], max_n=3)]
@@ -84,7 +89,7 @@ class analyser:
         self.average_results["avg_rest"] = np.average(self.individual_results["avg_rest"])
         self.average_results["song_len"] = np.average(self.individual_results["song_len"])
         self.average_results["scale_diff"] = np.average(self.individual_results["scale_diff"][1])
-        self.average_results["transitions"] = average_transitions(self.individual_results["transitions"])
+        self.average_results["transitions"] = average_transitions_map(self.individual_results["transitions"])
         # self.average_results["transitions_test"] = transition_map.average(self.individual_results["transitions_test"])
         self.average_results["bleu2"] = np.average(self.individual_results["bleu2"])
         self.average_results["bleu3"] = np.average(self.individual_results["bleu3"])
@@ -103,11 +108,18 @@ class analyser:
             self.individual_results["avg_rest"] = p.map(avg_rest, self.gaps)
             self.individual_results["song_len"] = p.starmap(song_len, zip(self.durations, self.gaps))
             self.individual_results["scale_diff"] = p.starmap(scale_diff, zip(self.notes, self.durations))
-            self.individual_results["transitions"] = p.map(transitions, self.notes)
+            self.individual_results["transitions"] = p.map(transitions_map, self.notes)
+            # self.individual_results["mmd_notes"] = p.starmap(mmd, zip(self.notes, self.ref_notes))
             # self.individual_results["transitions_test"] = p.map(transition_map, self.notes)
-            self.individual_results["bleu2"] = p.starmap(bleu2, zip(self.notes, self.ref_notes))
-            self.individual_results["bleu3"] = p.starmap(bleu3, zip(self.notes, self.ref_notes))
-            self.individual_results["bleu4"] = p.starmap(bleu4, zip(self.notes, self.ref_notes))
+            self.individual_results["bleu2_notes"] = p.starmap(bleu2_trans, zip(self.notes, self.ref_notes))
+            self.individual_results["bleu3_notes"] = p.starmap(bleu3_trans, zip(self.notes, self.ref_notes))
+            self.individual_results["bleu4_notes"] = p.starmap(bleu4_trans, zip(self.notes, self.ref_notes))
+            self.individual_results["bleu2_durations"] = p.starmap(bleu2, zip(self.durations, self.ref_durations))
+            self.individual_results["bleu3_durations"] = p.starmap(bleu3, zip(self.durations, self.ref_durations))
+            self.individual_results["bleu4_durations"] = p.starmap(bleu4, zip(self.durations, self.ref_durations))
+            self.individual_results["bleu2_gaps"] = p.starmap(bleu2, zip(self.gaps, self.ref_gaps))
+            self.individual_results["bleu3_gaps"] = p.starmap(bleu3, zip(self.gaps, self.ref_gaps))
+            self.individual_results["bleu4_gaps"] = p.starmap(bleu4, zip(self.gaps, self.ref_gaps))
         
         # Averages of generated
         self.average_results["span"] = np.average(self.individual_results["span"])
@@ -119,14 +131,23 @@ class analyser:
         self.average_results["avg_rest"] = np.average(self.individual_results["avg_rest"])
         self.average_results["song_len"] = np.average(self.individual_results["song_len"])
         self.average_results["scale_diff"] = np.average(self.individual_results["scale_diff"])
-        self.average_results["transitions"] = average_transitions(self.individual_results["transitions"])
+        self.average_results["transitions"] = average_transitions_map(self.individual_results["transitions"])
+        # self.average_results["mmd_notes"] = np.average(self.individual_results["mmd_notes"])
         # self.average_results["transitions_test"] = transition_map.average(self.individual_results["transitions_test"])
-        self.average_results["bleu2"] = np.average(self.individual_results["bleu2"])
-        self.average_results["bleu3"] = np.average(self.individual_results["bleu3"])
-        self.average_results["bleu4"] = np.average(self.individual_results["bleu4"])
+        self.average_results["bleu2_notes"] = np.average(self.individual_results["bleu2_notes"])
+        self.average_results["bleu3_notes"] = np.average(self.individual_results["bleu3_notes"])
+        self.average_results["bleu4_notes"] = np.average(self.individual_results["bleu4_notes"])
+        self.average_results["bleu2_durations"] = np.average(self.individual_results["bleu2_durations"])
+        self.average_results["bleu3_durations"] = np.average(self.individual_results["bleu3_durations"])
+        self.average_results["bleu4_durations"] = np.average(self.individual_results["bleu4_durations"])
+        self.average_results["bleu2_gaps"] = np.average(self.individual_results["bleu2_gaps"])
+        self.average_results["bleu3_gaps"] = np.average(self.individual_results["bleu3_gaps"])
+        self.average_results["bleu4_gaps"] = np.average(self.individual_results["bleu4_gaps"])
         return self.average_results
     
     def references(self, ref_notes = None, ref_durations = None, ref_gaps = None):
+        """DEPRECATED"""
+
         if ref_notes is None or ref_durations is None or ref_gaps is None or len(ref_notes) != len(ref_durations) != len(ref_gaps):
             ref_notes = self.ref_notes
             ref_durations = self.ref_durations
@@ -142,8 +163,8 @@ class analyser:
             self.individual_references["restless"] += [count_ngrams(ref_gap,1)[(0.0,)]]
             self.individual_references["avg_rest"] += [np.average(ref_gap)]
             self.individual_references["song_len"] += [sum(ref_duration)+ sum(ref_gap)]
-            self.individual_references["scale_diff"] += [find_closest_fit(ref_note, ref_duration, SCALES)[1]]
-            self.individual_references["transitions"] += [transitions(ref_note)]
+            self.individual_references["scale_diff"] += [find_closest_fit(ref_note, ref_duration, ALL_SCALES)[1]]
+            self.individual_references["transitions"] += [transitions_map(ref_note)]
             # self.individual_references["transitions_test"] += [transition_map(ref_note)]
 
         # Average of reference songs
@@ -156,7 +177,7 @@ class analyser:
         self.average_references["avg_rest"] = np.average(self.individual_references["avg_rest"])
         self.average_references["song_len"] = np.average(self.individual_references["song_len"])
         self.average_references["scale_diff"] = np.average(self.individual_references["scale_diff"])
-        self.average_references["transitions"] = average_transitions(self.individual_references["transitions"])
+        self.average_references["transitions"] = average_transitions_map(self.individual_references["transitions"])
         # self.average_references["transitions_test"] = transition_map.average(self.individual_references["transitions_test"])
         return self.average_references
     
@@ -172,7 +193,7 @@ class analyser:
             self.individual_references["avg_rest"] = p.map(avg_rest, self.ref_gaps)
             self.individual_references["song_len"] = p.starmap(song_len, zip(self.ref_durations, self.ref_gaps))
             self.individual_references["scale_diff"] = p.starmap(scale_diff, zip(self.ref_notes, self.ref_durations))
-            self.individual_references["transitions"] = p.map(transitions, self.ref_notes)
+            self.individual_references["transitions"] = p.map(transitions_map, self.ref_notes)
             # self.individual_references["transitions_test"] = p.map(lambda note: transition_map(note), self.ref_notes)
 
         # Average of reference songs
@@ -185,10 +206,13 @@ class analyser:
         self.average_references["avg_rest"] = np.average(self.individual_references["avg_rest"])
         self.average_references["song_len"] = np.average(self.individual_references["song_len"])
         self.average_references["scale_diff"] = np.average(self.individual_references["scale_diff"])
-        self.average_references["transitions"] = average_transitions(self.individual_references["transitions"])
+        self.average_references["transitions"] = average_transitions_map(self.individual_references["transitions"])
         # self.average_references["transitions_test"] = transition_map.average(self.individual_references["transitions_test"])
         
         return self.average_references
+    class Encoder(json.JSONEncoder):
+        def default(self, o):
+            return o.__dict__
 import timeit
 def test():
     dataset = pd.read_csv("./data/new_dataset/test.csv")

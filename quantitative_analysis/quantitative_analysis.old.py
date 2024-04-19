@@ -9,7 +9,7 @@ import pandas as pd
 from utils.quantize import decode_note, decode_duration, decode_gap
 import torch
 import numpy as np
-from utils.ngram import ngram_repetition, count_ngrams, transitions, transition_map
+from utils.ngram import ngram_repetition, count_ngrams, transitions_map, transition_map_old
 from utils.BLEUscore import bleu_score
 from dataloader.dataset import SongsDataset
 import json
@@ -18,7 +18,7 @@ from collections import defaultdict
 from multiprocessing import Pool
 from statistics import mean
 
-SCALES = [scale(scale.MAJOR_SCALE, i) for i in range(12)] + [scale(scale.MINOR_SCALE, i) for i in range(12)]
+SCALES = [scale(scale.MAJOR_SCALE, i) for i in range(12)] + [scale(scale.NATMIN_SCALE, i) for i in range(12)]
 
 def decode_midi_sequence(decoded_output):
     sequence = []

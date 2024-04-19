@@ -5,7 +5,8 @@ class scale:
     Represents a scale in the sense of a note appartenance class.
     """
     MAJOR_SCALE=[0,2,4,5,7,9,11]
-    MINOR_SCALE=[0,2,3,5,7,8,11]
+    NATMIN_SCALE=[0, 2, 3, 5, 7, 8, 10]
+    NATMIN_SCALE=[0,2,3,5,7,8,11]
     def __init__(self, note_pattern: list[int], offset: int=0):
         """
         Creates a scale.
@@ -31,7 +32,7 @@ class scale:
         """
         Returns the magnitude and direction (+/-) to the closest note in the scale.
         """
-        note = note%12
+        note = (note-self.offset)%12
         note_diff = numpy.subtract(self.note_pattern, note)
         return note_diff[numpy.argmin(numpy.abs(note_diff))]
 
@@ -59,6 +60,8 @@ def find_closest_fit(notes, durations, scales):
     appartenances = [scale_candidate.melody_appartenance(notes, durations) for scale_candidate in scales]
     return scales[numpy.argmin(appartenances)], min(appartenances)
 
+ALL_SCALES = [scale(scale.MAJOR_SCALE, i) for i in range(12)] + [scale(scale.NATMIN_SCALE, i) for i in range(12)] + [scale(scale.NATMIN_SCALE, i) for i in range(12)]
+
 def test():
     test_scale = scale(scale.MAJOR_SCALE, 0)
     test_notes = [0,1,2,3,3.5,4,6,13.2]
@@ -69,6 +72,10 @@ def test():
     assert test_scale.difference(13.2) - float(0.8) < 0.00001 #Floating point error
     assert test_scale.difference(12.8) + float(0.8) < 0.00001 #Floating point error
     assert test_scale.fit_to_scale(test_notes) == [0, 0, 2, 2, 4, 4, 5, 14]
+    # test_notes = [i +10 for i in scale.MAJOR_SCALE]
+    # closest_scale = find_closest_fit(test_notes, [1]*7, ALL_SCALES)[0]
+    # print([closest_scale.difference(note) for note in test_notes])
+
 
 
 if __name__ == '__main__':
