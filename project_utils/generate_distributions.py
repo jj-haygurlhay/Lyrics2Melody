@@ -18,7 +18,7 @@ def create_distributions(csv_filename):
         reader = csv.DictReader(csvfile)
         for row in reader:
             # Assuming 'midi_note' is the key and contains a list of lists
-            note_info_list = eval(row['midi_note'])
+            note_info_list = eval(row['midi_notes'])
             for note_info in note_info_list:
                 # Extract and append individual elements to their respective lists
                 midi_notes_list.append(note_info[0])
