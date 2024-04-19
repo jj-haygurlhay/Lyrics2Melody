@@ -11,9 +11,9 @@ from midi2audio import FluidSynth
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model_dir = './runs/RNN/2024-04-18_17-18-48/' # Change this to the path of the model you want to use
-topk = [50, 5, 5] # [notes, durations, gaps]
-temperature = 0.7
+model_dir = './runs/RNN/2024-04-18_18-33-18/' # Change this to the path of the model you want to use
+topk = [30, 5, 5] # [notes, durations, gaps]
+temperature = 0.5
 
 model_path = os.path.join(model_dir, 'model_best_mmd.pt')
 config_path = os.path.join(model_dir, 'config.yaml')
