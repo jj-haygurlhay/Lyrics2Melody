@@ -135,14 +135,20 @@ class analyser:
         
         # Averages of generated
         self.average_results["span"] = np.average(self.individual_results["span"])
+        self.average_results["span_std"] = np.std(self.individual_results["span"])
         self.average_results["rep2"] = np.average(self.individual_results["rep2"])
+        self.average_results["rep2_std"] = np.std(self.individual_results["rep2"])
         self.average_results["rep3"] = np.average(self.individual_results["rep3"])
+        self.average_results["rep3_std"] = np.std(self.individual_results["rep3"])
         self.average_results["rep4"] = np.average(self.individual_results["rep4"])
+        self.average_results["rep4_std"] = np.std(self.individual_results["rep4"])
         self.average_results["unique"] = np.average(self.individual_results["unique"])
+        self.average_results["unique_std"] = np.std(self.individual_results["unique"])
         self.average_results["restless"] = np.average(self.individual_results["restless"])
         self.average_results["avg_rest"] = np.average(self.individual_results["avg_rest"])
         self.average_results["song_len"] = np.average(self.individual_results["song_len"])
         self.average_results["scale_diff"] = np.average(self.individual_results["scale_diff"])
+        self.average_results["scale_diff_std"] = np.std(self.individual_results["scale_diff"])
         self.average_results["transitions"] = average_distribution(self.individual_results["transitions"])
         self.average_results["distribution_notes"] = average_distribution(self.individual_results["distribution_notes"])
         self.average_results["bleu2_notes"] = np.average(self.individual_results["bleu2_notes"])
@@ -154,6 +160,7 @@ class analyser:
         self.average_results["bleu2_gaps"] = np.average(self.individual_results["bleu2_gaps"])
         self.average_results["bleu3_gaps"] = np.average(self.individual_results["bleu3_gaps"])
         self.average_results["bleu4_gaps"] = np.average(self.individual_results["bleu4_gaps"])
+        
         return self.average_results
     
     def references(self, ref_notes = None, ref_durations = None, ref_gaps = None):
@@ -209,14 +216,20 @@ class analyser:
 
         # Average of reference songs
         self.average_references["span"] = np.average(self.individual_references["span"])
+        self.average_references["span_std"] = np.std(self.individual_references["span"])
         self.average_references["rep2"] = np.average(self.individual_references["rep2"])
+        self.average_references["rep2_std"] = np.std(self.individual_references["rep2"])
         self.average_references["rep3"] = np.average(self.individual_references["rep3"])
+        self.average_references["rep3_std"] = np.std(self.individual_references["rep3"])
         self.average_references["rep4"] = np.average(self.individual_references["rep4"])
+        self.average_references["rep4_std"] = np.std(self.individual_references["rep4"])
         self.average_references["unique"] = np.average(self.individual_references["unique"])
+        self.average_references["unique_std"] = np.std(self.individual_references["unique"])
         self.average_references["restless"] = np.average(self.individual_references["restless"])
         self.average_references["avg_rest"] = np.average(self.individual_references["avg_rest"])
         self.average_references["song_len"] = np.average(self.individual_references["song_len"])
         self.average_references["scale_diff"] = np.average(self.individual_references["scale_diff"])
+        self.average_references["scale_diff_std"] = np.std(self.individual_references["scale_diff"])
         self.average_references["transitions"] = average_distribution(self.individual_references["transitions"])
         self.average_references["distribution_notes"] = average_distribution(self.individual_references["distribution_notes"])
         # self.average_references["transitions_test"] = transition_map.average(self.individual_references["transitions_test"])
