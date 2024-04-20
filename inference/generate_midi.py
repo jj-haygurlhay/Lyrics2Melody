@@ -24,7 +24,7 @@ class GenerateMidi:
         midi_utils.save_midi(mid, filename)
         print(f'MIDI file saved as {filename}')
 
-    def create_midi_pattern_from_discretized_data(self, midi_sequence):
+    def create_midi_pattern(self, midi_sequence):
         new_midi = pretty_midi.PrettyMIDI()
         voice = pretty_midi.Instrument(1)  # It's here to change the used instruments !
         tempo = 120
