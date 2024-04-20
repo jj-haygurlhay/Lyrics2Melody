@@ -1,6 +1,4 @@
 import os
-import numpy as np
-from tqdm import tqdm
 import yaml
 import torch
 from torch.utils.data import DataLoader
@@ -12,12 +10,7 @@ from transformers import (
 from dataloader import SongsDataset
 from models import CustomModelRNN
 from datetime import datetime
-import matplotlib.pyplot as plt
 from training import Trainer
-
-from project_utils.BLEUscore import bleu_score
-from project_utils.mmd import Compute_MMD
-from threading import Thread
 
 HYPS_FILE = './config/hyps.yaml'
 EOS_token = 1
@@ -54,7 +47,7 @@ def main():
         decoder_hidden_size=config['model']['decoder_hidden_size'],
         encoder_hidden_size=config['model']['encoder_hidden_size'],
         embedding_dim=config['model']['embedding_dim'], 
-        SOS_token=0, 
+        SOS_token=SOS_token, 
         MAX_LENGTH=config['data']['max_sequence_length'], 
         dropout_p=config['model']['dropout'],
         num_layers=config['model']['num_layers'],
