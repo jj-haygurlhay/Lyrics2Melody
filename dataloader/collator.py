@@ -3,13 +3,14 @@ import torch
 import json
 import numpy as np
 
-from project_utils.quantize import encode_note, encode_duration, encode_gap
+from project_utils.quantize import encode_note, encode_duration, encode_gap, MIDI_NOTES
     
 class SongsCollator:
-    def __init__(self, syllables_lang, output_eos=1, max_length=128):
+    def __init__(self, syllables_lang, output_eos=1, max_length=128, octave_shift_percentage=0):
         self.syllables_lang = syllables_lang
         self.output_eos = output_eos
         self.max_length = max_length
+        self.octave_shift_percentage = octave_shift_percentage
 
     def serialize_melody(self, midi_seq):
         """
@@ -36,7 +37,10 @@ class SongsCollator:
         all_notes, all_durations, all_gaps = [], [], []
         all_lyrics = []
 
-        for item in batch:
+        # Randomly shift the melody by an octave for a percentage of the batch
+        octave_shift_ids = np.random.choice(len(batch), int(len(batch) * self.octave_shift_percentage), replace=False)
+
+        for i, item in enumerate(batch):
             # Serialize lyrics
             lyrics_tokens = self.serialize_lyrics(item['syl_lyrics'])
             if len(lyrics_tokens) < self.max_length:
@@ -46,6 +50,15 @@ class SongsCollator:
             # Serialize melody
             midi_seq = json.loads(item['midi_notes'])[:self.max_length - 1]
             notes, durations, gaps = self.serialize_melody(midi_seq)
+            if i in octave_shift_ids:
+                shift = np.random.choice([-1,1]) * np.random.choice([2, 4, 6, 8, 10, 12]) # Randomly add or subtract tones
+                if np.min(notes) < np.abs(shift):
+                    shift = np.abs(shift)
+                elif np.max(notes) + np.abs(shift) > MIDI_NOTES[-1]:
+                    shift = -np.abs(shift)
+
+                notes = [note + shift for note in notes]
+
             notes.append(self.output_eos)
             durations.append(self.output_eos)
             gaps.append(self.output_eos)
@@ -53,6 +66,7 @@ class SongsCollator:
                 notes += [0] * (self.max_length - len(notes) )
                 durations += [0] * (self.max_length - len(durations) )
                 gaps += [0] * (self.max_length - len(gaps))
+
             all_notes.append(notes)
             all_durations.append(durations)
             all_gaps.append(gaps)

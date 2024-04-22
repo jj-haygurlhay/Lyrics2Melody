@@ -23,7 +23,7 @@ def main():
 
     # Create output file
     out_dir = config['out_dir']
-    run_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    run_dir = config['add_to_runname'] + '_' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     output_folder = os.path.join(out_dir, run_dir)
     os.makedirs(output_folder, exist_ok=True)
     config['training']['out_dir'] = output_folder
@@ -58,7 +58,7 @@ def main():
     train_dataset = SongsDataset(config['data']['data_dir'], split='train')
     valid_dataset = SongsDataset(config['data']['data_dir'], split='valid')
     test_dataset  = SongsDataset(config['data']['data_dir'], split='test')
-    collator = SongsCollator(syllables_lang=syllables, output_eos=EOS_token, max_length=config['data']['max_sequence_length'])
+    collator = SongsCollator(syllables_lang=syllables, output_eos=EOS_token, max_length=config['data']['max_sequence_length'], octave_shift_percentage=config['data']['octave_shift_percentage'])
     
     batch_size = config['training']['batch_size']
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collator, pin_memory=True, num_workers=0)
