@@ -6,7 +6,7 @@ model:
   num_layers: 1
 
 training:
-  batch_size: 1024
+  batch_size: 1500
   epochs: 200
   lr: 1e-5
   weight_decay: 0.01
@@ -19,6 +19,8 @@ training:
 data:
   data_dir: './data/data_aug_step20'
   max_sequence_length: 21 # include <eos>
+  octave_shift_percentage: 0.9
 
 seed: 42
 out_dir: './runs/RNN'
+add_to_run_name: ''
