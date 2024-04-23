@@ -60,6 +60,18 @@ def find_closest_fit(notes, durations, scales):
     appartenances = [scale_candidate.melody_appartenance(notes, durations) for scale_candidate in scales]
     return scales[numpy.argmin(appartenances)], min(appartenances)
 
+def fit_to_closest(midiseq):
+    clamped = numpy.array(midiseq)
+    key, diff = find_closest_fit(clamped[:,0], clamped[:,1], ALL_SCALES)
+    notes = key.fit_to_scale(clamped[:,0])
+    print(clamped[:,0])
+    print(notes)
+    # print(diff,)
+    clamped[:,0] = notes
+    print(diff, key.melody_appartenance(notes, clamped[:,1]))
+
+    return clamped
+
 ALL_SCALES = [scale(scale.MAJOR_SCALE, i) for i in range(12)] + [scale(scale.NATMIN_SCALE, i) for i in range(12)] + [scale(scale.NATMIN_SCALE, i) for i in range(12)]
 
 def test():

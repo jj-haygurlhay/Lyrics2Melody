@@ -8,6 +8,7 @@ from quantitative_analysis import Analyser
 from dataloader.dataset import SongsDataset
 import json
 from inference import Generator
+from project_utils import scale
 
 dirtytestdata = np.load("/mnt/1TB-HDD-2/Documents/Univ/Lyrics-Conditioned-Neural-Melody-Generation/data/processed_dataset_matrices/test_data_matrix.npy")
 dirtytestdata = dirtytestdata[:,0:60]
@@ -50,20 +51,25 @@ try:
     gen_not = gen_not[:target_anal_count,:]
     gen_dur = gen_dur[:target_anal_count,:]
     gen_gap = gen_gap[:target_anal_count,:]
+    assert 1==0
 except:
     print("Not enough cached melodies generated: generating enough now")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_dir = 'runs/data_aug_0.9_all_tones' # Change this to the path of the model you want to use
     topk = [30, 5, 5] # [notes, durations, gaps]
-    temperature = 0.5
+    temperature = 0.6
 
     # Load generator
     generator = Generator(model_dir, './vocab/syllables.txt', 'model_best.pt', device=device)
     outputs = list(map(lambda text: generator.predict(text, temperature=temperature, topk=topk), lyrics))
-    outputs = np.asarray(outputs)
+    print(outputs[0])
+    clamped_outputs = list(map(scale.fit_to_closest, outputs))
+    outputs = np.array(outputs)
 
     gen_not = outputs[:,:,0]
+    gen_clamped_not = np.array(clamped_outputs)[:,:,0]
+    print(gen_not[-1,:], gen_clamped_not[-1,:])
     gen_dur = outputs[:,:,1]
     gen_gap = outputs[:,:,2]
 
@@ -72,12 +78,20 @@ except:
     np.save("/home/max/Documents/Univ/Lyrics2Melody/runs/data_aug_0.9_all_tones/cached_generation/generated_rests.npy", gen_gap)
 
 analyser = Analyser(lyrics, (gen_not).tolist(), (gen_dur).tolist(), (gen_gap).tolist(), (ref_not).tolist(), (ref_dur).tolist(), (ref_gap).tolist())
+
 gen_stats = analyser.analyse_multi()
 ref_stats = analyser.references_multi()
+
 with open("quantitative_analysis/model_best/gen_stats", "w") as f:
     json.dump(gen_stats, f, indent=4)
 with open("quantitative_analysis/model_best/ref_stats", "w") as f:
     json.dump(ref_stats, f, indent=4)    
 
+clamped_analyser = Analyser(lyrics, (gen_clamped_not).tolist(), (gen_dur).tolist(), (gen_gap).tolist(), (ref_not).tolist(), (ref_dur).tolist(), (ref_gap).tolist())
+
+gen_clamped_stats = clamped_analyser.analyse_multi()
+
+with open("quantitative_analysis/model_best/gen_clamped_stats", "w") as f:
+    json.dump(gen_clamped_stats, f, indent=4)
 # with open("quantitative_analysis/lstm-gan_stats/analyser", "w") as f:
 #     json.dump(analyser, f, cls=Analyser.Encoder, indent=4)
