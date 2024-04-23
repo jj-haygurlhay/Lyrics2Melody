@@ -12,11 +12,11 @@ import pandas as pd
 # from utils import decode_note, decode_duration, decode_gap
 import torch
 import numpy as np
-from utils.ngram import ngram_repetition, count_ngrams, transitions
-from utils.BLEUscore import bleu_score
-from utils.mmd import Compute_MMD as mmd
+from project_utils.ngram import ngram_repetition, count_ngrams, transitions
+from project_utils.BLEUscore import bleu_score
+from project_utils.mmd import Compute_MMD as mmd
 import json
-from utils.scale import scale, find_closest_fit, ALL_SCALES
+from project_utils.scale import scale, find_closest_fit, ALL_SCALES
 from collections import defaultdict
 from multiprocessing import Pool
 from statistics import mean
@@ -44,18 +44,18 @@ def average_distribution(distributions):
         for val, count in distribution.items():
             avg_distribution[val] += count/len(distributions)
     return avg_distribution
-def bleu2_trans(vals, ref_vals): return bleu_score([transitions(vals)], [[transitions(ref_vals)]], max_n=2)
-def bleu3_trans(vals, ref_vals): return bleu_score([transitions(vals)], [[transitions(ref_vals)]], max_n=3)
-def bleu4_trans(vals, ref_vals): return bleu_score([transitions(vals)], [[transitions(ref_vals)]], max_n=4)
-def bleu2(vals, ref_vals): return bleu_score([vals], [[ref_vals]], max_n=2)
-def bleu3(vals, ref_vals): return bleu_score([vals], [[ref_vals]], max_n=3)
-def bleu4(vals, ref_vals): return bleu_score([vals], [[ref_vals]], max_n=4)
+def bleu2_trans(vals, ref_vals): return bleu_score([transitions(vals)], np.asarray([[transitions(ref_vals)]]), max_n=2)
+def bleu3_trans(vals, ref_vals): return bleu_score([transitions(vals)], np.asarray([[transitions(ref_vals)]]), max_n=3)
+def bleu4_trans(vals, ref_vals): return bleu_score([transitions(vals)], np.asarray([[transitions(ref_vals)]]), max_n=4)
+def bleu2(vals, ref_vals): return bleu_score([vals], np.asarray([[ref_vals]]), max_n=2)
+def bleu3(vals, ref_vals): return bleu_score([vals], np.asarray([[ref_vals]]), max_n=3)
+def bleu4(vals, ref_vals): return bleu_score([vals], np.asarray([[ref_vals]]), max_n=4)
 # def ndg_bleu2(notes, ref_notes,durations, ref_durations,gaps, ref_gaps): return (bleu_score([transitions(notes)], [[transitions(ref_notes)]], max_n=2) + bleu_score([durations], [[ref_durations]], max_n=2) + bleu_score([gaps], [[ref_gaps]], max_n=2))/3
 # def ndg_bleu3(notes, ref_notes,durations, ref_durations,gaps, ref_gaps): return (bleu_score([transitions(notes)], [[transitions(ref_notes)]], max_n=3) + bleu_score([durations], [[ref_durations]], max_n=3) + bleu_score([gaps], [[ref_gaps]], max_n=3))/3
 # def ndg_bleu4(notes, ref_notes,durations, ref_durations,gaps, ref_gaps): return (bleu_score([transitions(notes)], [[transitions(ref_notes)]], max_n=4) + bleu_score([durations], [[ref_durations]], max_n=4) + bleu_score([gaps], [[ref_gaps]], max_n=4))/3
 
 
-class analyser:
+class Analyser:
     def __init__(self, lyrics, notes, durations, gaps, ref_notes, ref_durations, ref_gaps):
         """
         All input arrays should be aligned so that every entry on a single index corresponds to a single song
@@ -253,7 +253,7 @@ def test():
     ref_durations = [[midi[1] for midi in reference][0:20] for reference in references]
     ref_gaps = [[midi[2] for midi in reference][0:20] for reference in references]
     
-    anal = analyser(inputs, notes, durations, gaps, ref_notes, ref_durations, ref_gaps)
+    anal = Analyser(inputs, notes, durations, gaps, ref_notes, ref_durations, ref_gaps)
     t2 = timeit.default_timer()
     print(anal.analyse_multi())
     print(anal.references_multi())
