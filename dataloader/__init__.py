@@ -1,2 +1,2 @@
 from .dataset import SongsDataset
-from .collator import SongsCollator, SongsCollatorTransformer, SongsCollatorTransformerV2
+from .collator import SongsCollator, SongsCollatorTransformer

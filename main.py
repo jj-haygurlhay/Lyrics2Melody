@@ -2,7 +2,7 @@ import os
 import yaml
 import torch
 from torch.utils.data import DataLoader
-from dataloader import SongsCollator, SongsCollatorTransformer, SongsCollatorTransformerV2
+from dataloader import SongsCollator, SongsCollatorTransformer
 from dataloader.vocab import Lang
 from transformers import (
     set_seed,
@@ -104,7 +104,6 @@ def main_transformer():
     model = CustomModelTransformer(
         encoder=encoder,
         device=device,
-        SOS_token=SOS_token,
         MAX_LENGTH=config['data']['max_sequence_length'],
         train_encoder=config['training']['train_encoder'],
         dropout_p=config['model']['dropout'],
@@ -119,8 +118,6 @@ def main_transformer():
     test_dataset  = SongsDataset(config['data']['data_dir'], split='test')
     collator = SongsCollatorTransformer(
         tokenizer=tokenizer, 
-        output_eos=EOS_token,
-        output_sos=SOS_token,
         max_length=config['data']['max_sequence_length'], 
         use_syllables=config['data']['use_syllables']
         )

@@ -219,15 +219,11 @@ class TrainerTransformer:
             
             print(f"Epoch {epoch}, Validation Loss: {val_loss}")
             
-            # remove SOS and EOS tokens
-            true_notes = true_notes[:, 1:-1]
-            true_durations = true_durations[:, 1:-1]
-            true_gaps = true_gaps[:, 1:-1]
-            pred_notes = pred_notes[:, 1:-1]
-            pred_durations = pred_durations[:, 1:-1]
-            pred_gaps = pred_gaps[:, 1:-1]
-            # print(true_notes[0])
-            # print(pred_notes[0])
+            # remove SOS
+            pred_notes = pred_notes[:, 1:]
+            pred_durations = pred_durations[:, 1:]
+            pred_gaps = pred_gaps[:, 1:]
+
             mmd_notes = self.evaluator.evaluate_preds(epoch, loss, val_loss, pred_notes, pred_durations, pred_gaps, true_notes, true_durations, true_gaps)
             self.evaluator.retrieve_results()
 
@@ -249,22 +245,25 @@ class TrainerTransformer:
             target_notes = data['labels']['notes'].to(self.device)
             target_durations = data['labels']['durations'].to(self.device)
             target_gaps = data['labels']['gaps'].to(self.device)
-           
-
-            target_tensor = torch.cat([target_notes.unsqueeze(-1), target_durations.unsqueeze(-1), target_gaps.unsqueeze(-1)], dim=-1)
-            # decoder_input = target_tensor[:, :-1, :]  # Use all but the last element for input
+            
+            decoder_input = torch.cat([target_notes.unsqueeze(-1),
+                                   target_durations.unsqueeze(-1),
+                                   target_gaps.unsqueeze(-1)
+                                   ], dim=-1)
 
             self.optimizer.zero_grad()
             
-            decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps = self.model(input_tensor, attn_mask, target_tensor)
+            decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps = self.model(input_tensor, attn_mask, decoder_input)
             
-            # Remove SOS token and EOS token for loss calculation
-            target_notes = target_notes[:, 1:-1]
-            target_durations = target_durations[:, 1:-1]
-            target_gaps = target_gaps[:, 1:-1]
-            decoder_outputs_notes = decoder_outputs_notes[:, 1:-1, :]
-            decoder_outputs_durations = decoder_outputs_durations[:, 1:-1, :]
-            decoder_outputs_gaps = decoder_outputs_gaps[:, 1:-1, :]
+            # Loss calculated from the first token after SOS
+            target_notes = target_notes[:, 1:]
+            target_durations = target_durations[:, 1:]
+            target_gaps = target_gaps[:, 1:]
+            
+            # Exclude the first output from the decoder corresponding to the prediction from SOS
+            decoder_outputs_notes = decoder_outputs_notes[:, 1:, :]
+            decoder_outputs_durations = decoder_outputs_durations[:, 1:, :]
+            decoder_outputs_gaps = decoder_outputs_gaps[:, 1:, :]
             
             loss_notes = self.criterion(decoder_outputs_notes.transpose(1, 2), target_notes)
             loss_durations = self.criterion(decoder_outputs_durations.transpose(1, 2), target_durations)
@@ -277,7 +276,6 @@ class TrainerTransformer:
             self.scheduler.step()
 
             total_loss += loss.item()
-
             progress_bar.set_postfix({'Training Loss': total_loss / len(self.train_loader)})
 
         return total_loss / len(self.train_loader)
@@ -304,14 +302,14 @@ class TrainerTransformer:
 
                 decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, logits_notes, logits_durations, logits_gaps = self.model.generate(input_tensor, attn_mask, temperature=0.6)
 
-                # Remove SOS token and EOS token for loss calculation
-                target_notes = target_notes[:, 1:-1]
-                target_durations = target_durations[:, 1:-1]
-                target_gaps = target_gaps[:, 1:-1]
-                decoder_outputs_notes = decoder_outputs_notes[:, 1:-1, :]
-                decoder_outputs_durations = decoder_outputs_durations[:, 1:-1, :]
-                decoder_outputs_gaps = decoder_outputs_gaps[:, 1:-1, :]
-
+                # Loss calculated from the first token after SOS
+                target_notes = target_notes[:, 1:]
+                target_durations = target_durations[:, 1:]
+                target_gaps = target_gaps[:, 1:]
+                logits_notes = logits_notes[:, 1:]
+                logits_durations = logits_durations[:, 1:]
+                logits_gaps = logits_gaps[:, 1:]
+                
                 loss_notes     = self.criterion(logits_notes.transpose(1, 2), target_notes)
                 loss_durations = self.criterion(logits_durations.transpose(1, 2), target_durations)
                 loss_gaps      = self.criterion(logits_gaps.transpose(1, 2), target_gaps)
@@ -321,11 +319,11 @@ class TrainerTransformer:
 
                 if not is_printed and self.print_predictions:
                     print(f"\nInput: {data['input_ids'][0].cpu().numpy()}")
-                    print(f"\nTarget notes: {data['labels']['notes'][0].cpu().numpy()}")
+                    print(f"\nTarget notes: {target_notes[0].cpu().numpy()}")
                     print(f"Predicted notes: {decoder_outputs_notes[0].cpu().numpy()}")
-                    print(f"\nTarget durations: {data['labels']['durations'][0].cpu().numpy()}")
+                    print(f"\nTarget durations: {target_durations[0].cpu().numpy()}")
                     print(f"Predicted durations: {decoder_outputs_durations[0].cpu().numpy()}")
-                    print(f"\nTarget gaps: {data['labels']['gaps'][0].cpu().numpy()}")
+                    print(f"\nTarget gaps: {target_gaps[0].cpu().numpy()}")
                     print(f"Predicted gaps: {decoder_outputs_gaps[0].cpu().numpy()}")
                     is_printed = True
 

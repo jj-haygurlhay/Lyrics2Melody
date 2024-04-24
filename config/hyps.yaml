@@ -21,7 +21,7 @@ training:
 
 data:
   data_dir: './data/new_dataset'
-  max_sequence_length: 22 # include <eos> and <sos>
+  max_sequence_length: 21 # include <sos>
   use_syllables: False
 
 seed: 42

@@ -11,12 +11,13 @@ from project_utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
 class CustomModelTransformer(BaseModel):
 
-    def __init__(self, encoder, device, SOS_token=0, EOS_token=1, MAX_LENGTH=100, dropout_p=0.1, train_encoder=False, expansion_factor=4, num_heads=8, num_layers=2):
+    def __init__(self, encoder, device, MAX_LENGTH=20, dropout_p=0.1, train_encoder=False, expansion_factor=4, num_heads=8, num_layers=2):
         super().__init__()
         self.device = device
         self.MAX_LENGTH = MAX_LENGTH
-        self.SOS_token = SOS_token
-        self.EOS_token = EOS_token
+        self.SOS_token_note = len(MIDI_NOTES)
+        self.SOS_token_duration = len(DURATIONS)
+        self.SOS_token_gap = len(GAPS)
 
         # Take pretrained encoder
         self.encoder = encoder
@@ -24,9 +25,9 @@ class CustomModelTransformer(BaseModel):
         # Define decoder
         self.decoder = CustomTransformerDecoderMulti(
             hidden_size=encoder.config.n_positions,
-            output_size_note=len(MIDI_NOTES)+2,
-            output_size_duration=len(DURATIONS)+2,
-            output_size_gap=len(GAPS)+2,
+            output_size_note=len(MIDI_NOTES)+1,
+            output_size_duration=len(DURATIONS)+1,
+            output_size_gap=len(GAPS)+1,
             MAX_LENGTH=MAX_LENGTH,
             dropout_p=dropout_p,
             device=device,
@@ -48,14 +49,11 @@ class CustomModelTransformer(BaseModel):
             module.weight.data.normal_(mean=0.0, std=0.02)
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
 
     def make_trg_mask(self, trg):
-        """
-        Args:
-            trg: target sequence
-        Returns:
-            trg_mask: target mask
-        """
         trg_len = trg.shape[1]
         # returns the lower triangular part of matrix filled with ones
         trg_mask = torch.tril(torch.ones((trg_len, trg_len))).to(self.device)
@@ -69,20 +67,25 @@ class CustomModelTransformer(BaseModel):
             encoder_output = self.encoder(x, attn, output_hidden_states=True, output_attentions=False)
         
         target_mask = self.make_trg_mask(target)
-
+        
         note, duration, gap = self.decoder(target, encoder_output[0], target_mask)
 
         return note, duration, gap    
     
-    def generate(self, x, attn, do_sample=True, max_length=22, temperature=0.8, top_k=50, top_p=0.95, num_return_sequences=1, early_stopping=False, num_beams=1, min_length=10, use_cache=True, length_penalty=1.0):
-        target = torch.full((x.shape[0], 1, 3), fill_value=self.SOS_token, dtype=torch.int64).to(self.device)
+    def generate(self, x, attn, do_sample=True, max_length=21, temperature=0.8, top_k=50, top_p=0.95, num_return_sequences=1, early_stopping=False, num_beams=1, min_length=10, use_cache=True, length_penalty=1.0):
+        # tensors for each SOS token
+        sos_note = torch.full((x.shape[0], 1), self.SOS_token_note, dtype=torch.int64).to(self.device)
+        sos_duration = torch.full((x.shape[0], 1), self.SOS_token_duration, dtype=torch.int64).to(self.device)
+        sos_gap = torch.full((x.shape[0], 1), self.SOS_token_gap, dtype=torch.int64).to(self.device)
+
+        target = torch.cat([sos_note, sos_duration, sos_gap], dim=-1).unsqueeze(1)
+        
         encoder_output = self.encoder(x, attn, output_hidden_states=True, output_attentions=False)
 
-        
         sampled_notes, sampled_durations, sampled_gaps = [], [], []
         logits_notes, logits_durations, logits_gaps = [], [], []
 
-        for _ in range(max_length):  # max_length includes room for EOS, hence -1 for starting from SOS
+        for _ in range(max_length):
             target_mask = self.make_trg_mask(target)
             note_logits, duration_logits, gap_logits = self.decoder(target, encoder_output[0], target_mask)
 
