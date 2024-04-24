@@ -21,7 +21,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def main():
     with open(HYPS_FILE, "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
-
+    
+    set_seed(config['seed'])
+    
     # Create output file
     out_dir = config['out_dir']
     run_dir = config['add_to_runname'] + '_' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -33,9 +35,14 @@ def main():
     with open(os.path.join(output_folder, 'config.yaml'), 'w') as f:
         yaml.dump(config, f)
     
-    # Set seed
-    set_seed(config['seed'])
-    
+    if config['model']['type'].lower() == 'rnn':
+        main_rnn(config)
+    elif config['model']['type'].lower() == 'transformer':
+        main_transformer(config)
+    else:
+        raise ValueError('Invalid model type! Choose between "rnn" and "transformer"')
+
+def main_rnn(config):   
     # Create language objects
     syllables = Lang('syllables')
     lines = open('./vocab/syllables.txt', 'r', encoding='utf-8').read().strip().split('\n')
@@ -79,24 +86,7 @@ def main():
     # Train model
     trainer.train()
 
-def main_transformer():
-    with open(HYPS_FILE, "r") as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
-
-    # Create output file
-    out_dir = config['out_dir']
-    run_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_folder = os.path.join(out_dir, run_dir)
-    os.makedirs(output_folder, exist_ok=True)
-    config['training']['out_dir'] = output_folder
-
-    # Save config file
-    with open(os.path.join(output_folder, 'config.yaml'), 'w') as f:
-        yaml.dump(config, f)
-    
-    # Set seed
-    set_seed(config['seed'])
-    
+def main_transformer(config):
     tokenizer = T5Tokenizer.from_pretrained('t5-small')
     encoder = T5EncoderModel.from_pretrained('t5-small')
 

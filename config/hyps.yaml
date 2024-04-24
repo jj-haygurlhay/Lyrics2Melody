@@ -1,8 +1,9 @@
 model:
+  type: 'Transformer' # or 'RNN'
   dropout: 0.4
   encoder_hidden_size: 256
   decoder_hidden_size: 256
-  embedding_dim: 130
+  embedding_dim: 128
   num_layers: 4
   expansion_factor: 4
   num_heads: 8
