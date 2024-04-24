@@ -109,7 +109,8 @@ def main_transformer(config):
     collator = SongsCollatorTransformer(
         tokenizer=tokenizer, 
         max_length=config['data']['max_sequence_length'], 
-        use_syllables=config['data']['use_syllables']
+        use_syllables=config['data']['use_syllables'],
+        octave_shift_percentage=config['data']['octave_shift_percentage']
         )
     
     batch_size = config['training']['batch_size']

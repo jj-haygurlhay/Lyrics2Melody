@@ -84,13 +84,14 @@ class SongsCollator:
         return encoding
     
 class SongsCollatorTransformer:
-    def __init__(self, tokenizer, max_length=128, use_syllables=False):
+    def __init__(self, tokenizer, max_length=128, use_syllables=False, octave_shift_percentage=0):
         self.tokenizer = tokenizer
         self.SOS_token_note = len(MIDI_NOTES)
         self.SOS_token_duration = len(DURATIONS)
         self.SOS_token_gap = len(GAPS)
         self.max_length = max_length
         self.use_syllables = use_syllables
+        self.octave_shift_percentage = octave_shift_percentage
 
     def serialize_melody(self, midi_seq):
         """
@@ -110,13 +111,27 @@ class SongsCollatorTransformer:
 
         all_notes, all_durations, all_gaps = [], [], []
 
-        for item in batch:
+        # Randomly shift the melody by an octave for a percentage of the batch
+        octave_shift_ids = np.random.choice(len(batch), int(len(batch) * self.octave_shift_percentage), replace=False)
+
+        for i, item in enumerate(batch):
 
             midi_seq = json.loads(item['midi_notes'])[:self.max_length - 1]
             notes, durations, gaps = self.serialize_melody(midi_seq)
+            
+            if i in octave_shift_ids:
+                shift = np.random.choice([-1,1]) * np.random.choice([2, 4, 6, 8, 10, 12]) # Randomly add or subtract tones
+                if np.min(notes) < np.abs(shift):
+                    shift = np.abs(shift)
+                elif np.max(notes) + np.abs(shift) > MIDI_NOTES[-1]:
+                    shift = -np.abs(shift)
+
+                notes = [note + shift for note in notes]
+            
             notes = [self.SOS_token_note] + notes
             durations = [self.SOS_token_duration] + durations
             gaps = [self.SOS_token_gap] + gaps
+            
             if len(notes) < self.max_length:
                 # notes += [self.PAD_token] * (self.max_length - len(notes) )
                 # durations += [self.PAD_token] * (self.max_length - len(durations) )
