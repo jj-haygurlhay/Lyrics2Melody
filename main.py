@@ -2,15 +2,16 @@ import os
 import yaml
 import torch
 from torch.utils.data import DataLoader
-from dataloader.collator import SongsCollator
+from dataloader import SongsCollator, SongsCollatorTransformer, SongsCollatorTransformerV2
 from dataloader.vocab import Lang
 from transformers import (
     set_seed,
 )
 from dataloader import SongsDataset
-from models import CustomModelRNN
+from models import CustomModelRNN, CustomModelTransformer
 from datetime import datetime
-from training import Trainer
+from training import Trainer, TrainerTransformer
+from transformers import T5Tokenizer, T5EncoderModel
 
 HYPS_FILE = './config/hyps.yaml'
 EOS_token = 1
@@ -78,5 +79,70 @@ def main():
     # Train model
     trainer.train()
 
+def main_transformer():
+    with open(HYPS_FILE, "r") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+
+    # Create output file
+    out_dir = config['out_dir']
+    run_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    output_folder = os.path.join(out_dir, run_dir)
+    os.makedirs(output_folder, exist_ok=True)
+    config['training']['out_dir'] = output_folder
+
+    # Save config file
+    with open(os.path.join(output_folder, 'config.yaml'), 'w') as f:
+        yaml.dump(config, f)
+    
+    # Set seed
+    set_seed(config['seed'])
+    
+    tokenizer = T5Tokenizer.from_pretrained('t5-small')
+    encoder = T5EncoderModel.from_pretrained('t5-small')
+
+    # Initialize model
+    model = CustomModelTransformer(
+        encoder=encoder,
+        device=device,
+        SOS_token=SOS_token,
+        MAX_LENGTH=config['data']['max_sequence_length'],
+        train_encoder=config['training']['train_encoder'],
+        dropout_p=config['model']['dropout'],
+        expansion_factor=config['model']['expansion_factor'],
+        num_heads=config['model']['num_heads'],
+        num_layers=config['model']['num_layers']
+        )
+
+    # Create dataset and collator
+    train_dataset = SongsDataset(config['data']['data_dir'], split='train')
+    valid_dataset = SongsDataset(config['data']['data_dir'], split='valid')
+    test_dataset  = SongsDataset(config['data']['data_dir'], split='test')
+    collator = SongsCollatorTransformer(
+        tokenizer=tokenizer, 
+        output_eos=EOS_token,
+        output_sos=SOS_token,
+        max_length=config['data']['max_sequence_length'], 
+        use_syllables=config['data']['use_syllables']
+        )
+    
+    batch_size = config['training']['batch_size']
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collator, pin_memory=True, num_workers=0)
+    val_loader   = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator, pin_memory=True, num_workers=0)
+    test_loader  = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator, pin_memory=True,  num_workers=0)
+
+    # Create trainer
+    trainer = TrainerTransformer(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        test_loader=test_loader,
+        device=device,
+        **config['training']
+    )
+
+    # Train model
+    trainer.train()
+
 if __name__ == "__main__":
-    main()
+    # main()
+    main_transformer()
