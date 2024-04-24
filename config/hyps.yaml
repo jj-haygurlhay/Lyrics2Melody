@@ -22,7 +22,9 @@ training:
 data:
   data_dir: './data/data_aug_step20'
   max_sequence_length: 21 # include <sos>
+  octave_shift_percentage: 0.9
   use_syllables: False
 
 seed: 42
 out_dir: './runs/T5'
+add_to_run_name: ''

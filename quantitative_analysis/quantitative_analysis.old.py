@@ -6,17 +6,19 @@ from transformers import (
     AutoTokenizer
 )
 import pandas as pd
-from project_utils.quantize import decode_note, decode_duration, decode_gap
+from utils.quantize import decode_note, decode_duration, decode_gap
 import torch
 import numpy as np
-from project_utils.ngram import ngram_repetition, count_ngrams
-from project_utils.BLEUscore import bleu_score
+from utils.ngram import ngram_repetition, count_ngrams, transitions_map, transition_map_old
+from utils.BLEUscore import bleu_score
 from dataloader.dataset import SongsDataset
 import json
-from project_utils.scale import scale, find_closest_fit
-# from inference import decode_midi_sequence
+from utils.scale import scale, find_closest_fit
+from collections import defaultdict
+from multiprocessing import Pool
+from statistics import mean
 
-SCALES = [scale(scale.MAJOR_SCALE, i) for i in range(12)] + [scale(scale.MINOR_SCALE, i) for i in range(12)]
+SCALES = [scale(scale.MAJOR_SCALE, i) for i in range(12)] + [scale(scale.NATMIN_SCALE, i) for i in range(12)]
 
 def decode_midi_sequence(decoded_output):
     sequence = []
@@ -241,14 +243,3 @@ class reference:
             self.average[leng]["transitions"] = dict().fromkeys(range(-128, 128), 0)
             for trans in self.average[leng]["transitions"].keys():
                 self.average[leng]["transitions"][trans] = np.average([transition_temp[i][trans] for i in range(len(transition_temp))])
-
-def test():
-    analyser = quantitative_analysis("../runs/1-Avril-Rapport", "seq2seq", "../data/new_dataset/test.csv", [19,39,59])
-    analyser.generate_midi(4,4)
-    analyser.analyse()
-    print(analyser.ref.average[19])
-    print(analyser.average[19])
-
-if __name__ == "__main__":
-    test()
-

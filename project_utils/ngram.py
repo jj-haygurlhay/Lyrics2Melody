@@ -1,5 +1,5 @@
 import collections
-
+from collections import defaultdict
 def _get_ngrams(token_list, n):
         return zip(*[token_list[i:] for i in range(n)])
 
@@ -60,6 +60,10 @@ def _compute_ngram_counter(tokens, max_n):
 
 def ngram_repetition(token_list,n):
     return sum([x - 1 for x in count_ngrams(token_list,n).values()])
+
+def transitions(notes):
+    return [bigram[1]-bigram[0] for bigram in _get_ngrams(notes, 2)]
+
 
 def test():
     pred = [[(1,1),(2,2),(3,3),(4,4),(1,1),(5,5)]]
