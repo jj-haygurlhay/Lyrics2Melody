@@ -1,26 +1,26 @@
 model:
-  dropout: 0.5
-  encoder_hidden_size: 64
-  decoder_hidden_size: 64
-  embedding_dim: 128
-  num_layers: 1
-  expansion_factor: 1
+  dropout: 0.4
+  encoder_hidden_size: 256
+  decoder_hidden_size: 256
+  embedding_dim: 130
+  num_layers: 4
+  expansion_factor: 4
   num_heads: 8
 
 training:
-  batch_size: 512
-  epochs: 200
-  lr: 1e-5
+  batch_size: 256
+  epochs: 100
+  lr: 5e-7
   weight_decay: 0.01
   train_encoder: False
-  note_loss_weight: 0.6
-  duration_loss_weight: 0.3
-  gap_loss_weight: 0.1
+  note_loss_weight: 1.25
+  duration_loss_weight: 0.75
+  gap_loss_weight: 0.3
   print_predictions: True # print first eval predictions during training
   generate_temp: 0.6
 
 data:
-  data_dir: './data/new_dataset'
+  data_dir: './data/data_aug_step20'
   max_sequence_length: 21 # include <sos>
   use_syllables: False
 
