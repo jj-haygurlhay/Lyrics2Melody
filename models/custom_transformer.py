@@ -10,12 +10,12 @@ from project_utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
 class CustomModelTransformer(BaseModel):
 
-    def __init__(self, encoder, PAD_token, SOS_token, device, MAX_LENGTH=20, dropout_p=0.1, train_encoder=False, expansion_factor=4, num_heads=8, num_layers=2):
+    def __init__(self, encoder, EOS_token, SOS_token, device, MAX_LENGTH=21, dropout_p=0.1, train_encoder=False, expansion_factor=4, num_heads=8, num_layers=2):
         super().__init__()
         self.device = device
         self.MAX_LENGTH = MAX_LENGTH
         self.SOS_token = SOS_token
-        self.PAD_token = PAD_token
+        self.EOS_token = EOS_token
 
         # Take pretrained encoder
         self.encoder = encoder
@@ -81,7 +81,7 @@ class CustomModelTransformer(BaseModel):
         sampled_notes, sampled_durations, sampled_gaps = [], [], []
         logits_notes, logits_durations, logits_gaps = [], [], []
 
-        for _ in range(max_length):
+        for _ in range(self.MAX_LENGTH):
             target_mask = self.make_trg_mask(target)
             note_logits, duration_logits, gap_logits = self.decoder(target, encoder_output[0], target_mask)
 
@@ -97,9 +97,10 @@ class CustomModelTransformer(BaseModel):
                 gap_logits = gap_logits[:, -1, :] / temperature
 
                 # Apply top-k sampling
-                note_logits = self.apply_top_k_sampling(note_logits, top_k)
-                duration_logits = self.apply_top_k_sampling(duration_logits, top_k)
-                gap_logits = self.apply_top_k_sampling(gap_logits, top_k)
+                if top_k is not None:
+                    note_logits = self.apply_top_k_sampling(note_logits, top_k[0])
+                    duration_logits = self.apply_top_k_sampling(duration_logits, top_k[1])
+                    gap_logits = self.apply_top_k_sampling(gap_logits, top_k[2])
 
                 # Sampling using softmax
                 note = torch.multinomial(torch.softmax(note_logits, dim=-1), 1)
@@ -130,7 +131,7 @@ class CustomModelTransformer(BaseModel):
         return sampled_notes, sampled_durations, sampled_gaps, logits_notes, logits_durations, logits_gaps
 
     def apply_top_k_sampling(self, logits, top_k):
-        if top_k is not None and top_k > 0:
+        if top_k > 0:
             top_values, _ = torch.topk(logits, top_k)
             kth_value = top_values[:, -1].view(-1, 1)
             mask = logits < kth_value

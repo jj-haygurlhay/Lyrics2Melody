@@ -6,10 +6,10 @@ import numpy as np
 from project_utils.quantize import encode_note, encode_duration, encode_gap, MIDI_NOTES, DURATIONS, GAPS
     
 class SongsCollator:
-    def __init__(self, syllables_lang, SOS_token, PAD_token, max_length=128, octave_shift_percentage=0):
+    def __init__(self, syllables_lang, SOS_token, EOS_token, max_length=128, octave_shift_percentage=0):
         self.syllables_lang = syllables_lang
         self.SOS_token = SOS_token
-        self.PAD_token = PAD_token
+        self.EOS_token = EOS_token
         self.max_length = max_length
         self.octave_shift_percentage = octave_shift_percentage
 
@@ -45,7 +45,7 @@ class SongsCollator:
             # Serialize lyrics
             lyrics_tokens = self.serialize_lyrics(item['syl_lyrics'])
             if len(lyrics_tokens) < self.max_length:
-                lyrics_tokens += [self.PAD_token] * (self.max_length - len(lyrics_tokens))
+                lyrics_tokens += [self.EOS_token] * (self.max_length - len(lyrics_tokens))
             all_lyrics.append(lyrics_tokens)
 
             # Serialize melody
@@ -65,9 +65,9 @@ class SongsCollator:
             gaps = [self.SOS_token] + gaps
             
             if len(notes) < self.max_length:
-                notes += [self.PAD_token] * (self.max_length - len(notes) )
-                durations += [self.PAD_token] * (self.max_length - len(durations) )
-                gaps += [self.PAD_token] * (self.max_length - len(gaps))
+                notes += [self.EOS_token] * (self.max_length - len(notes) )
+                durations += [self.EOS_token] * (self.max_length - len(durations) )
+                gaps += [self.EOS_token] * (self.max_length - len(gaps))
                 
             all_notes.append(notes)
             all_durations.append(durations)
@@ -86,10 +86,10 @@ class SongsCollator:
         return encoding
     
 class SongsCollatorTransformer:
-    def __init__(self, tokenizer, SOS_token, PAD_token, max_length=128, use_syllables=False, octave_shift_percentage=0):
+    def __init__(self, tokenizer, SOS_token, EOS_token, max_length=128, use_syllables=False, octave_shift_percentage=0):
         self.tokenizer = tokenizer
         self.SOS_token = SOS_token
-        self.PAD_token = PAD_token
+        self.EOS_token = EOS_token
         self.max_length = max_length
         self.use_syllables = use_syllables
         self.octave_shift_percentage = octave_shift_percentage
@@ -134,9 +134,9 @@ class SongsCollatorTransformer:
             gaps = [self.SOS_token] + gaps
             
             if len(notes) < self.max_length:
-                notes += [self.PAD_token] * (self.max_length - len(notes) )
-                durations += [self.PAD_token] * (self.max_length - len(durations) )
-                gaps += [self.PAD_token] * (self.max_length - len(gaps))
+                notes += [self.EOS_token] * (self.max_length - len(notes) )
+                durations += [self.EOS_token] * (self.max_length - len(durations) )
+                gaps += [self.EOS_token] * (self.max_length - len(gaps))
             all_notes.append(notes)
             all_durations.append(durations)
             all_gaps.append(gaps)

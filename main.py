@@ -55,6 +55,7 @@ def main_rnn(config):
         decoder_hidden_size=config['model']['decoder_hidden_size'],
         encoder_hidden_size=config['model']['encoder_hidden_size'],
         embedding_dim=config['model']['embedding_dim'], 
+        EOS_token=EOS_token,
         SOS_token=SOS_token, 
         MAX_LENGTH=config['data']['max_sequence_length'], 
         dropout_p=config['model']['dropout'],
@@ -68,7 +69,7 @@ def main_rnn(config):
     test_dataset  = SongsDataset(config['data']['data_dir'], split='test')
     collator = SongsCollator(
         syllables_lang=syllables, 
-        PAD_token=EOS_token,
+        EOS_token=EOS_token,
         SOS_token=SOS_token,
         max_length=config['data']['max_sequence_length'], 
         octave_shift_percentage=config['data']['octave_shift_percentage']
@@ -106,7 +107,7 @@ def main_transformer(config):
     # Initialize model
     model = CustomModelTransformer(
         encoder=encoder,
-        PAD_token=EOS_token,
+        EOS_token=EOS_token,
         SOS_token=SOS_token,
         device=device,
         MAX_LENGTH=config['data']['max_sequence_length'],
@@ -123,7 +124,7 @@ def main_transformer(config):
     test_dataset  = SongsDataset(config['data']['data_dir'], split='test')
     collator = SongsCollatorTransformer(
         tokenizer=tokenizer, 
-        PAD_token=EOS_token,
+        EOS_token=EOS_token,
         SOS_token=SOS_token,
         max_length=config['data']['max_sequence_length'], 
         use_syllables=config['data']['use_syllables'],
