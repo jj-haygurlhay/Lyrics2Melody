@@ -131,10 +131,11 @@ def main_transformer(config):
         octave_shift_percentage=config['data']['octave_shift_percentage']
         )
     collator_valid_test = SongsCollatorTransformer(
-        syllables_lang=syllables, 
+        tokenizer=tokenizer, 
         EOS_token=EOS_token,
         SOS_token=SOS_token,
         max_length=config['data']['max_sequence_length'], 
+        use_syllables=config['data']['use_syllables'],
         octave_shift_percentage=0
         )
     
