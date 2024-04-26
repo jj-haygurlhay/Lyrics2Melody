@@ -94,6 +94,7 @@ class Generator:
             decoder_hidden_size=self.config['model']['decoder_hidden_size'],
             encoder_hidden_size=self.config['model']['encoder_hidden_size'],
             embedding_dim=self.config['model']['embedding_dim'], 
+            PAD_token=1,
             SOS_token=0, 
             MAX_LENGTH=self.config['data']['max_sequence_length'], 
             dropout_p=self.config['model']['dropout'],
