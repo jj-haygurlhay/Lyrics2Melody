@@ -11,7 +11,6 @@ topk = [30, 5, 5] # [notes, durations, gaps]
 temperature = 0.5
 log_multiple_gen = False
 model_type = 'transformer'
-shift = 1 # POUR LE BEST T5, j'ai seulement utilisé le PAD token, donc shift=1
 
 # Load generator
 generator = Generator(model_dir, './vocab/syllables.txt', 'model_best.pt', model_type, device=device)
@@ -25,7 +24,7 @@ midi_sequence_logging_path = os.path.join(output_folder, 'midi_sequences.txt')
 log_amount = 50 if log_multiple_gen else 1
 
 for i in range(log_amount):
-    midi_sequence = generator.predict(text, temperature=temperature, topk=topk, shift=shift)
+    midi_sequence = generator.predict(text, temperature=temperature, topk=topk)
     print('MIDI sequence', midi_sequence)
     
     # Save MIDI sequence
