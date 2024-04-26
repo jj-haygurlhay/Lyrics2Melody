@@ -93,6 +93,8 @@ def main_transformer(config):
     # Initialize model
     model = CustomModelTransformer(
         encoder=encoder,
+        PAD_token=EOS_token,
+        SOS_token=SOS_token,
         device=device,
         MAX_LENGTH=config['data']['max_sequence_length'],
         train_encoder=config['training']['train_encoder'],
@@ -108,6 +110,8 @@ def main_transformer(config):
     test_dataset  = SongsDataset(config['data']['data_dir'], split='test')
     collator = SongsCollatorTransformer(
         tokenizer=tokenizer, 
+        PAD_token=EOS_token,
+        SOS_token=SOS_token,
         max_length=config['data']['max_sequence_length'], 
         use_syllables=config['data']['use_syllables'],
         octave_shift_percentage=config['data']['octave_shift_percentage']
@@ -132,5 +136,4 @@ def main_transformer(config):
     trainer.train()
 
 if __name__ == "__main__":
-    # main()
-    main_transformer()
+    main()

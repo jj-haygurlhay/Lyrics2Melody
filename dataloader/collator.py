@@ -84,11 +84,10 @@ class SongsCollator:
         return encoding
     
 class SongsCollatorTransformer:
-    def __init__(self, tokenizer, max_length=128, use_syllables=False, octave_shift_percentage=0):
+    def __init__(self, tokenizer, SOS_token, PAD_token, max_length=128, use_syllables=False, octave_shift_percentage=0):
         self.tokenizer = tokenizer
-        self.SOS_token_note = len(MIDI_NOTES)
-        self.SOS_token_duration = len(DURATIONS)
-        self.SOS_token_gap = len(GAPS)
+        self.SOS_token = SOS_token
+        self.PAD_token = PAD_token
         self.max_length = max_length
         self.use_syllables = use_syllables
         self.octave_shift_percentage = octave_shift_percentage
@@ -100,9 +99,9 @@ class SongsCollatorTransformer:
         """
         notes, durations, gaps = [], [], []
         for note, duration, gap in midi_seq:
-            notes.append(int(note))
-            durations.append(encode_duration(duration))
-            gaps.append(encode_gap(gap))
+            notes.append(int(note) + 2)
+            durations.append(encode_duration(duration) + 2)
+            gaps.append(encode_gap(gap) + 2)
         return notes, durations, gaps
 
     def __call__(self, batch):
@@ -128,15 +127,14 @@ class SongsCollatorTransformer:
 
                 notes = [note + shift for note in notes]
             
-            notes = [self.SOS_token_note] + notes
-            durations = [self.SOS_token_duration] + durations
-            gaps = [self.SOS_token_gap] + gaps
+            notes = [self.SOS_token] + notes
+            durations = [self.SOS_token] + durations
+            gaps = [self.SOS_token] + gaps
             
             if len(notes) < self.max_length:
-                # notes += [self.PAD_token] * (self.max_length - len(notes) )
-                # durations += [self.PAD_token] * (self.max_length - len(durations) )
-                # gaps += [self.PAD_token] * (self.max_length - len(gaps))
-                continue  # Skip sequences that are too short
+                notes += [self.PAD_token] * (self.max_length - len(notes) )
+                durations += [self.PAD_token] * (self.max_length - len(durations) )
+                gaps += [self.PAD_token] * (self.max_length - len(gaps))
             all_notes.append(notes)
             all_durations.append(durations)
             all_gaps.append(gaps)

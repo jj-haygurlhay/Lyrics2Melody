@@ -1,21 +1,21 @@
 model:
   type: 'Transformer' # or 'RNN'
   dropout: 0.4
-  encoder_hidden_size: 256
-  decoder_hidden_size: 256
+  encoder_hidden_size: 128
+  decoder_hidden_size: 128
   embedding_dim: 128
   num_layers: 4
   expansion_factor: 4
   num_heads: 8
 
 training:
-  batch_size: 256
-  epochs: 100
-  lr: 5e-7
-  weight_decay: 0.01
+  batch_size: 512
+  epochs: 25
+  lr: 1e-6
+  weight_decay: 0.03
   train_encoder: False
   note_loss_weight: 1.25
-  duration_loss_weight: 0.75
+  duration_loss_weight: 0.5
   gap_loss_weight: 0.3
   print_predictions: True # print first eval predictions during training
   generate_temp: 0.6
@@ -28,4 +28,4 @@ data:
 
 seed: 42
 out_dir: './runs/T5'
-add_to_run_name: ''
+add_to_runname: 't5_shift0'
