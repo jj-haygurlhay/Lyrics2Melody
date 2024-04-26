@@ -220,9 +220,12 @@ class TrainerTransformer:
             print(f"Epoch {epoch}, Validation Loss: {val_loss}")
             
             # remove SOS
-            # pred_notes = pred_notes[:, 1:]
-            # pred_durations = pred_durations[:, 1:]
-            # pred_gaps = pred_gaps[:, 1:]
+            pred_notes = pred_notes[:, 1:]
+            pred_durations = pred_durations[:, 1:]
+            pred_gaps = pred_gaps[:, 1:]
+            true_notes = true_notes[:, 1:]
+            true_durations = true_durations[:, 1:]
+            true_gaps = true_gaps[:, 1:]
 
             mmd_notes = self.evaluator.evaluate_preds(epoch, loss, val_loss, pred_notes, pred_durations, pred_gaps, true_notes, true_durations, true_gaps)
             self.evaluator.retrieve_results()

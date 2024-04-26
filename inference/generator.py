@@ -45,9 +45,7 @@ class Generator:
         return midi_sequence
         
     def predict_transformer(self, lyrics, temperature=1.0, topk=None):
-        print(lyrics)
         inputs = self.serialize_lyrics_transformer(lyrics, self.config['data']['max_sequence_length'])
-        print(inputs)
         inputs.to(self.device)
         input_tensor = torch.tensor(inputs['input_ids']).to(self.device)
         
@@ -59,7 +57,12 @@ class Generator:
                                                                                                 temperature=temperature,
                                                                                                 top_k=topk
                                                                                             )
-        print(decoder_outputs_notes)
+
+        # remove SOS
+        decoder_outputs_notes = decoder_outputs_notes[:, 1:]
+        decoder_outputs_durations = decoder_outputs_durations[:, 1:]
+        decoder_outputs_gaps = decoder_outputs_gaps[:, 1:]
+
         midi_sequence = self.decode_outputs(decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps)
         
         return midi_sequence
@@ -71,9 +74,6 @@ class Generator:
                 note_id = note.item()
                 duration_id = duration.item()
                 gap_id = gap.item()
-                print(note_id)
-                print(duration_id)
-                print(gap_id)
                 if note_id > 1 and duration_id > 1 and gap_id > 1:
                     try:
                         note = decode_note(note_id-2)
