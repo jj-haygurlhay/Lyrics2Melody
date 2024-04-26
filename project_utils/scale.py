@@ -64,11 +64,7 @@ def fit_to_closest(midiseq):
     clamped = numpy.array(midiseq)
     key, diff = find_closest_fit(clamped[:,0], clamped[:,1], ALL_SCALES)
     notes = key.fit_to_scale(clamped[:,0])
-    print(clamped[:,0])
-    print(notes)
-    # print(diff,)
     clamped[:,0] = notes
-    print(diff, key.melody_appartenance(notes, clamped[:,1]))
 
     return clamped
 
