@@ -70,7 +70,7 @@ class CustomModelTransformer(BaseModel):
 
         return note, duration, gap    
     
-    def generate(self, x, attn, do_sample=True, max_length=21, temperature=0.5, top_k=50):
+    def generate(self, x, attn, do_sample=True, max_length=21, temperature=0.5, top_k=None):
         sos_note = torch.full((x.shape[0], 1), self.SOS_token, dtype=torch.int64).to(self.device)
         sos_duration = torch.full((x.shape[0], 1), self.SOS_token, dtype=torch.int64).to(self.device)
         sos_gap = torch.full((x.shape[0], 1), self.SOS_token, dtype=torch.int64).to(self.device)

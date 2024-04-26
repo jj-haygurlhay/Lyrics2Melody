@@ -66,7 +66,13 @@ def main_rnn(config):
     train_dataset = SongsDataset(config['data']['data_dir'], split='train')
     valid_dataset = SongsDataset(config['data']['data_dir'], split='valid')
     test_dataset  = SongsDataset(config['data']['data_dir'], split='test')
-    collator = SongsCollator(syllables_lang=syllables, output_eos=EOS_token, max_length=config['data']['max_sequence_length'], octave_shift_percentage=config['data']['octave_shift_percentage'])
+    collator = SongsCollator(
+        syllables_lang=syllables, 
+        PAD_token=EOS_token,
+        SOS_token=SOS_token,
+        max_length=config['data']['max_sequence_length'], 
+        octave_shift_percentage=config['data']['octave_shift_percentage']
+        )
     
     batch_size = config['training']['batch_size']
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collator, pin_memory=True, num_workers=0)

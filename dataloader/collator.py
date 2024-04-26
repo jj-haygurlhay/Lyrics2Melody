@@ -6,9 +6,10 @@ import numpy as np
 from project_utils.quantize import encode_note, encode_duration, encode_gap, MIDI_NOTES, DURATIONS, GAPS
     
 class SongsCollator:
-    def __init__(self, syllables_lang, output_eos=1, max_length=128, octave_shift_percentage=0):
+    def __init__(self, syllables_lang, SOS_token, PAD_token, max_length=128, octave_shift_percentage=0):
         self.syllables_lang = syllables_lang
-        self.output_eos = output_eos
+        self.SOS_token = SOS_token
+        self.PAD_token = PAD_token
         self.max_length = max_length
         self.octave_shift_percentage = octave_shift_percentage
 
@@ -30,7 +31,7 @@ class SongsCollator:
         lyrics = re.sub(r'[^a-z0-9\s]', '', lyrics)
         for syllable in lyrics.split(' ')[:self.max_length - 1]:
             lyrics_tokens.append(self.syllables_lang.word2index[syllable])
-        lyrics_tokens.append(self.output_eos)
+        # lyrics_tokens.append(self.EOS_token)
         return lyrics_tokens
 
     def __call__(self, batch):
@@ -44,7 +45,7 @@ class SongsCollator:
             # Serialize lyrics
             lyrics_tokens = self.serialize_lyrics(item['syl_lyrics'])
             if len(lyrics_tokens) < self.max_length:
-                lyrics_tokens += [self.output_eos] * (self.max_length - len(lyrics_tokens))
+                lyrics_tokens += [self.PAD_token] * (self.max_length - len(lyrics_tokens))
             all_lyrics.append(lyrics_tokens)
 
             # Serialize melody
@@ -59,14 +60,15 @@ class SongsCollator:
 
                 notes = [note + shift for note in notes]
 
-            notes.append(self.output_eos)
-            durations.append(self.output_eos)
-            gaps.append(self.output_eos)
+            notes = [self.SOS_token] + notes
+            durations = [self.SOS_token] + durations
+            gaps = [self.SOS_token] + gaps
+            
             if len(notes) < self.max_length:
-                notes += [0] * (self.max_length - len(notes) )
-                durations += [0] * (self.max_length - len(durations) )
-                gaps += [0] * (self.max_length - len(gaps))
-
+                notes += [self.PAD_token] * (self.max_length - len(notes) )
+                durations += [self.PAD_token] * (self.max_length - len(durations) )
+                gaps += [self.PAD_token] * (self.max_length - len(gaps))
+                
             all_notes.append(notes)
             all_durations.append(durations)
             all_gaps.append(gaps)

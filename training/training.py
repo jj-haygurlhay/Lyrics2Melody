@@ -300,7 +300,7 @@ class TrainerTransformer:
                 target_durations = data['labels']['durations'].to(self.device)
                 target_gaps = data['labels']['gaps'].to(self.device)
 
-                decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, logits_notes, logits_durations, logits_gaps = self.model.generate(input_tensor, attn_mask, temperature=0.6)
+                decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, logits_notes, logits_durations, logits_gaps = self.model.generate(input_tensor, attn_mask, temperature=self.generate_temp)
 
                 # Loss calculated from the first token after SOS
                 target_notes = target_notes[:, 1:]
