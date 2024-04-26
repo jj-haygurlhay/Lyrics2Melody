@@ -6,10 +6,10 @@ from midi2audio import FluidSynth
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # PARAMETERS TO CHECK AND CHANGE
-model_dir = './runs/T5/t5_shift0_2024-04-26_05-04-46/' # Change this to the path of the model you want to use
+model_dir = './runs/T5/T5_shift0.8_2024-04-26_07-16-41/' # Change this to the path of the model you want to use
 topk = [30, 5, 5] # [notes, durations, gaps]
 temperature = 0.5
-log_multiple_gen = True
+log_multiple_gen = False
 model_type = 'transformer'
 shift = 1 # POUR LE BEST T5, j'ai seulement utilisé le PAD token, donc shift=1
 

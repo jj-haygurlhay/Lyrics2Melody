@@ -25,11 +25,11 @@ class Generator:
         else:
             raise ValueError('Invalid model type! Choose between "rnn" and "transformer"')
     
-    def predict(self, lyrics, temperature=1.0, topk=None, shift=2):
+    def predict(self, lyrics, temperature=1.0, topk=None):
         if self.model_type == 'rnn':
-            return self.predict_rnn(lyrics, temperature, topk, shift=shift)
+            return self.predict_rnn(lyrics, temperature, topk)
         elif self.model_type == 'transformer':
-            return self.predict_transformer(lyrics, temperature, topk, shift=shift)
+            return self.predict_transformer(lyrics, temperature, topk)
         else:
             raise ValueError('Invalid model type! Choose between "load_RNN_model" and "load_t5_model"')
     
@@ -40,34 +40,45 @@ class Generator:
         with torch.no_grad():
             _, _, _, _, _, decoded_notes, decoded_durations, decoded_gaps = self.model(input_tensor, generate_temp=temperature, topk=topk)
 
-        midi_sequence = self.decode_outputs(decoded_notes, decoded_durations, decoded_gaps, shift=shift)
+        midi_sequence = self.decode_outputs(decoded_notes, decoded_durations, decoded_gaps)
 
         return midi_sequence
         
-    def predict_transformer(self, lyrics, temperature=1.0, topk=None, shift=2):
-        inputs = [self.serialize_lyrics_transformer(lyrics, self.config['data']['max_sequence_length'])]
+    def predict_transformer(self, lyrics, temperature=1.0, topk=None):
+        print(lyrics)
+        inputs = self.serialize_lyrics_transformer(lyrics, self.config['data']['max_sequence_length'])
+        print(inputs)
+        inputs.to(self.device)
         input_tensor = torch.tensor(inputs['input_ids']).to(self.device)
         
         with torch.no_grad():
-           decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _,_,_  = self.model.generate(input_tensor, generate_temp=temperature, topk=topk)
-
-        midi_sequence = self.decode_outputs(decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, shift=shift)
+           decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, _,_,_  = self.model.generate(
+                                                                                                input_tensor, 
+                                                                                                inputs['attention_mask'], 
+                                                                                                max_length=self.config['data']['max_sequence_length'],
+                                                                                                temperature=temperature,
+                                                                                                top_k=topk
+                                                                                            )
+        print(decoder_outputs_notes)
+        midi_sequence = self.decode_outputs(decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps)
         
         return midi_sequence
 
-    # the shift is used when we use EOS/SOS/PAD tokens, so 1 means we used a EOS or PAD or SOS token. In the case of RNN, we used SOS and EOS tokens, so we need to shift by 2
-    def decode_outputs(self, decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, shift=2):
+    def decode_outputs(self, decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps):
         sequence = []
         err_count = 0
         for note, duration, gap in zip(decoder_outputs_notes[0], decoder_outputs_durations[0], decoder_outputs_gaps[0]):
                 note_id = note.item()
                 duration_id = duration.item()
                 gap_id = gap.item()
+                print(note_id)
+                print(duration_id)
+                print(gap_id)
                 if note_id > 1 and duration_id > 1 and gap_id > 1:
                     try:
-                        note = decode_note(note_id-shift)
-                        duration = decode_duration(duration_id-shift)
-                        gap = decode_gap(gap_id-shift)
+                        note = decode_note(note_id-2)
+                        duration = decode_duration(duration_id-2)
+                        gap = decode_gap(gap_id-2)
                         sequence.append([note, duration, gap])
                     except:
                         err_count += 1
@@ -94,7 +105,7 @@ class Generator:
             decoder_hidden_size=self.config['model']['decoder_hidden_size'],
             encoder_hidden_size=self.config['model']['encoder_hidden_size'],
             embedding_dim=self.config['model']['embedding_dim'], 
-            PAD_token=1,
+            EOS_token=1,
             SOS_token=0, 
             MAX_LENGTH=self.config['data']['max_sequence_length'], 
             dropout_p=self.config['model']['dropout'],
@@ -110,7 +121,7 @@ class Generator:
         encoder = T5EncoderModel.from_pretrained('t5-small')
         self.model = CustomModelTransformer(
             encoder=encoder,
-            PAD_token=1,
+            EOS_token=1,
             SOS_token=0,
             device=self.device,
             MAX_LENGTH=self.config['data']['max_sequence_length'],

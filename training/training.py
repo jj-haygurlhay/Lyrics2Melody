@@ -220,9 +220,9 @@ class TrainerTransformer:
             print(f"Epoch {epoch}, Validation Loss: {val_loss}")
             
             # remove SOS
-            pred_notes = pred_notes[:, 1:]
-            pred_durations = pred_durations[:, 1:]
-            pred_gaps = pred_gaps[:, 1:]
+            # pred_notes = pred_notes[:, 1:]
+            # pred_durations = pred_durations[:, 1:]
+            # pred_gaps = pred_gaps[:, 1:]
 
             mmd_notes = self.evaluator.evaluate_preds(epoch, loss, val_loss, pred_notes, pred_durations, pred_gaps, true_notes, true_durations, true_gaps)
             self.evaluator.retrieve_results()
@@ -255,15 +255,15 @@ class TrainerTransformer:
             
             decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps = self.model(input_tensor, attn_mask, decoder_input)
             
-            # Loss calculated from the first token after SOS
-            target_notes = target_notes[:, 1:]
-            target_durations = target_durations[:, 1:]
-            target_gaps = target_gaps[:, 1:]
+            # # Loss calculated from the first token after SOS
+            # target_notes = target_notes[:, 1:]
+            # target_durations = target_durations[:, 1:]
+            # target_gaps = target_gaps[:, 1:]
             
-            # Exclude the first output from the decoder corresponding to the prediction from SOS
-            decoder_outputs_notes = decoder_outputs_notes[:, 1:, :]
-            decoder_outputs_durations = decoder_outputs_durations[:, 1:, :]
-            decoder_outputs_gaps = decoder_outputs_gaps[:, 1:, :]
+            # # Exclude the first output from the decoder corresponding to the prediction from SOS
+            # decoder_outputs_notes = decoder_outputs_notes[:, 1:, :]
+            # decoder_outputs_durations = decoder_outputs_durations[:, 1:, :]
+            # decoder_outputs_gaps = decoder_outputs_gaps[:, 1:, :]
             
             loss_notes = self.criterion(decoder_outputs_notes.transpose(1, 2), target_notes)
             loss_durations = self.criterion(decoder_outputs_durations.transpose(1, 2), target_durations)
@@ -302,13 +302,13 @@ class TrainerTransformer:
 
                 decoder_outputs_notes, decoder_outputs_durations, decoder_outputs_gaps, logits_notes, logits_durations, logits_gaps = self.model.generate(input_tensor, attn_mask, temperature=self.generate_temp)
 
-                # Loss calculated from the first token after SOS
-                target_notes = target_notes[:, 1:]
-                target_durations = target_durations[:, 1:]
-                target_gaps = target_gaps[:, 1:]
-                logits_notes = logits_notes[:, 1:]
-                logits_durations = logits_durations[:, 1:]
-                logits_gaps = logits_gaps[:, 1:]
+                # # Loss calculated from the first token after SOS
+                # target_notes = target_notes[:, 1:]
+                # target_durations = target_durations[:, 1:]
+                # target_gaps = target_gaps[:, 1:]
+                # logits_notes = logits_notes[:, 1:]
+                # logits_durations = logits_durations[:, 1:]
+                # logits_gaps = logits_gaps[:, 1:]
                 
                 loss_notes     = self.criterion(logits_notes.transpose(1, 2), target_notes)
                 loss_durations = self.criterion(logits_durations.transpose(1, 2), target_durations)

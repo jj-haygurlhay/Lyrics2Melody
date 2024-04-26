@@ -8,11 +8,11 @@ from project_utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
 class CustomModelRNN(BaseModel):
 
-    def __init__(self, input_size, PAD_token, SOS_token, encoder_hidden_size, embedding_dim, decoder_hidden_size, num_layers, device, MAX_LENGTH=100, dropout_p=0.1):
+    def __init__(self, input_size, EOS_token, SOS_token, encoder_hidden_size, embedding_dim, decoder_hidden_size, num_layers, device, MAX_LENGTH=100, dropout_p=0.1):
         super().__init__()
         self.device = device
         self.SOS_token = SOS_token
-        self.PAD_token = PAD_token
+        self.EOS_token = EOS_token
 
         # Define Encoder
         self.encoder = EncoderRNN(
@@ -33,7 +33,7 @@ class CustomModelRNN(BaseModel):
             output_size_duration=len(DURATIONS)+2,
             output_size_gap=len(GAPS)+2,
             num_layers=num_layers,
-            PAD_token=PAD_token,
+            SOS_token=SOS_token,
             MAX_LENGTH=MAX_LENGTH,
             dropout_p=dropout_p,
             device=device
@@ -94,7 +94,7 @@ class Attention(nn.Module):
         return torch.softmax(attention, dim=1)
 
 class AttnDecoderRNN(nn.Module):
-    def __init__(self, embedding_dim, encoder_hidden_size, decoder_hidden_size, output_size_note, output_size_duration, output_size_gap, num_layers, dropout_p=0.1, device='cpu', PAD_token = 0, MAX_LENGTH = 100):
+    def __init__(self, embedding_dim, encoder_hidden_size, decoder_hidden_size, output_size_note, output_size_duration, output_size_gap, num_layers, dropout_p=0.1, device='cpu', SOS_token = 1, MAX_LENGTH = 100):
         super(AttnDecoderRNN, self).__init__()
         self.embedding = nn.Embedding(output_size_note + output_size_duration + output_size_gap, embedding_dim)
         self.attention = Attention(encoder_hidden_size, decoder_hidden_size)
@@ -104,12 +104,12 @@ class AttnDecoderRNN(nn.Module):
         self.out_gap = nn.Linear((encoder_hidden_size * 2) + decoder_hidden_size + embedding_dim, output_size_gap)
         self.dropout = nn.Dropout(dropout_p)
         self.device = device
-        self.PAD_token = PAD_token
+        self.SOS_token = SOS_token
         self.MAX_LENGTH = MAX_LENGTH
 
     def forward(self, encoder_outputs, encoder_hidden, target_tensor=None, temperature=1.0, topk=None):
         batch_size = encoder_outputs.size(0)
-        decoder_input = torch.zeros((batch_size, 3), dtype=torch.long, device=self.device).fill_(self.PAD_token)
+        decoder_input = torch.zeros((batch_size, 3), dtype=torch.long, device=self.device).fill_(self.SOS_token)
         decoder_hidden = encoder_hidden
         decoder_outputs_notes = []
         decoder_outputs_durations = []

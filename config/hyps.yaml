@@ -1,17 +1,17 @@
 model:
-  type: 'Transformer' # or 'RNN'
+  type: 'RNN' # or 'Transformer'
   dropout: 0.4
-  encoder_hidden_size: 128
-  decoder_hidden_size: 128
-  embedding_dim: 128
-  num_layers: 4
+  encoder_hidden_size: 64
+  decoder_hidden_size: 64
+  embedding_dim: 64
+  num_layers: 2
   expansion_factor: 4
-  num_heads: 8
+  num_heads: 4
 
 training:
-  batch_size: 512
-  epochs: 25
-  lr: 1e-6
+  batch_size: 1024
+  epochs: 100
+  lr: 4e-7
   weight_decay: 0.03
   train_encoder: False
   note_loss_weight: 1.25
@@ -23,9 +23,9 @@ training:
 data:
   data_dir: './data/data_aug_step20'
   max_sequence_length: 21 # include <sos>
-  octave_shift_percentage: 0.9
+  octave_shift_percentage: 0.8
   use_syllables: False
 
 seed: 42
-out_dir: './runs/T5'
-add_to_runname: 't5_shift0'
+out_dir: './runs/RNN'
+add_to_runname: 'rnn_shift0.8'
