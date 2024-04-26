@@ -76,7 +76,7 @@ def main_rnn(config):
         )
     collator_valid_test = SongsCollator(
         syllables_lang=syllables, 
-        PAD_token=EOS_token,
+        EOS_token=EOS_token,
         SOS_token=SOS_token,
         max_length=config['data']['max_sequence_length'], 
         octave_shift_percentage=0
