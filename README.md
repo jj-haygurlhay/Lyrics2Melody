@@ -3,6 +3,9 @@
 ## Table of content
 
 
+- [Installation](#installation)
+- [Usage](#usage)
+- [Generate melodies](#generate-melodies)
 
 This repo implements a MIDI sequences generator using a RNN made with GRU units and a custom Transformer Decoder made on top of T5 Encoder by Google. The project was made as a final project for the course IFT6759 - Projets (avancés) en apprentissage automatique at Université de Montréal.
 
