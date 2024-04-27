@@ -99,7 +99,10 @@ def full_analysis(model_dir, model_type, ref_not, ref_dur, ref_gap, lyrics, gene
 # full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
 # model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/data_aug_0.9_all_tones"
 # full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
-model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/T5_shift0.8_please_2024-04-26_23-06-13"
-t5melodies = np.load("/home/max/Documents/Univ/Lyrics2Melody/runs/T5_shift0.8_please_2024-04-26_23-06-13/cached_generation/midi_sequences.npy", allow_pickle=True)
-full_analysis(model_dir,"transformer", ref_not, ref_dur, ref_gap, lyrics, generated_bypass=t5melodies)
+# model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/T5_shift0.8_please_2024-04-26_23-06-13"
+# t5melodies = np.load("/home/max/Documents/Univ/Lyrics2Melody/runs/T5_shift0.8_please_2024-04-26_23-06-13/cached_generation/midi_sequences.npy", allow_pickle=True)
+# full_analysis(model_dir,"transformer", ref_not, ref_dur, ref_gap, lyrics, generated_bypass=t5melodies)
+
+random_melodies = np.load("/home/max/Documents/Univ/Lyrics2Melody/quantitative_analysis/random/sequences.npy", allow_pickle=True)
+full_analysis("/home/max/Documents/Univ/Lyrics2Melody/quantitative_analysis/random","NA", ref_not, ref_dur, ref_gap, lyrics, generated_bypass=random_melodies)
 
