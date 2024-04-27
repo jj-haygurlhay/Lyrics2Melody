@@ -34,7 +34,7 @@ with open("quantitative_analysis/lstm-gan_stats/ref_stats", "w") as f:
     json.dump(ref_stats, f, indent=4)
 
 
-target_anal_count = 100
+target_anal_count = 500
 test_dataset = SongsDataset("data/new_dataset", split="test")
 lyrics = test_dataset.syllables[0:target_anal_count]
 dirty_midi = [json.loads(midi)[0:20] for midi in test_dataset.midi_notes]
@@ -44,20 +44,22 @@ ref_not = dirty_midi[:target_anal_count,:,0]
 ref_dur = dirty_midi[:target_anal_count,:,1]
 ref_gap = dirty_midi[:target_anal_count,:,2]
 
-def full_analysis(model_dir, model_type, ref_not, ref_dur, ref_gap, lyrics):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    topk = [30, 5, 5] # [notes, durations, gaps]
-    temperature = 0.6 
-    generator = Generator(model_dir, './vocab/syllables.txt', 'model_best.pt',model_type, device=device)
-    outputs = list(map(lambda text: generator.predict(text, temperature=temperature, topk=topk), lyrics))
+def full_analysis(model_dir, model_type, ref_not, ref_dur, ref_gap, lyrics, generated_bypass=None):
+    if generated_bypass is None:
 
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        topk = [30, 5, 5] # [notes, durations, gaps]
+        temperature = 0.6 
+        generator = Generator(model_dir, './vocab/syllables.txt', 'model_best.pt',model_type, device=device)
+        outputs = list(map(lambda text: generator.predict(text, temperature=temperature, topk=topk), lyrics))
+    else:
+        outputs = (generated_bypass).tolist()
     #Some of our models cant garantee that 20 notes are generated, to fix this we clamp it to the minimum length or 20
     min_len_seq = min(map(len, outputs))
     target_len = min_len_seq if min_len_seq < 20 else 20
     if(target_len < 20): print(f"FOR {model_dir} SEQENCES OF {target_len} MIDI ARE BEING USED, EVERYTHING IN OUR ANALYSIS ASSUMES 20!!!!")
     for i in range(len(outputs)):
         outputs[i] = outputs[i][:target_len]
-
     clamped_outputs = list(map(scale.fit_to_closest, outputs))
     outputs = np.array(outputs)
     gen_not = outputs[:,:,0]
@@ -87,15 +89,17 @@ def full_analysis(model_dir, model_type, ref_not, ref_dur, ref_gap, lyrics):
     with open(model_dir + "/stats/gen_clamped_stats", "w") as f:
         json.dump(gen_clamped_stats, f, indent=4)
 
-model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/SlidingWindow_only_2024-04-25_15-43-53"
-full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
-model_dir ="/home/max/Documents/Univ/Lyrics2Melody/runs/SlidingWindow_Shift0.2_2024-04-25_19-17-02"
-full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
-model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/SlidingWindow_Shift0.8_2024-04-25_17-22-42"
-full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
-model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/Without_Aug_2024-04-25_14-39-15"
-full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
-model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/data_aug_0.9_all_tones"
-full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
-model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/t5_shift0_2024-04-26_05-04-46"
-full_analysis(model_dir,"transformer", ref_not, ref_dur, ref_gap, lyrics)
+# model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/SlidingWindow_noshift_lr1e-5_2024-04-26_22-16-45"
+# full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
+# model_dir ="/home/max/Documents/Univ/Lyrics2Melody/runs/SlidingWindow_Shift0.2_lr1e-5_2024-04-26_18-19-36"
+# full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
+# model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/SlidingWindow_Shift0.8_lr1e-5_2024-04-26_16-28-45"
+# full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
+# model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/Without_Aug_2024-04-25_14-39-15"
+# full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
+# model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/data_aug_0.9_all_tones"
+# full_analysis(model_dir,"rnn", ref_not, ref_dur, ref_gap, lyrics)
+model_dir = "/home/max/Documents/Univ/Lyrics2Melody/runs/T5_shift0.8_please_2024-04-26_23-06-13"
+t5melodies = np.load("/home/max/Documents/Univ/Lyrics2Melody/runs/T5_shift0.8_please_2024-04-26_23-06-13/cached_generation/midi_sequences.npy", allow_pickle=True)
+full_analysis(model_dir,"transformer", ref_not, ref_dur, ref_gap, lyrics, generated_bypass=t5melodies)
+
