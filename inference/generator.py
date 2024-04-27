@@ -84,7 +84,8 @@ class Generator:
                         err_count += 1
                         continue
                 else:
-                    break # EOS token reached
+                    if len(sequence) > 0:
+                        break # EOS token reached
         if err_count > 0:
             print(f"Error count: {err_count}")
         return sequence
