@@ -4,6 +4,7 @@
 
 
 - [Installation](#installation)
+- [Dataset](#dataset)
 - [Usage](#usage)
 - [Generate melodies](#generate-melodies)
 
@@ -24,6 +25,10 @@ pip install -e .
 ```
 
 If you want to generate melodies in a `.wav` format, you need to install the `Fluidsynth` software and add a soundfont to it. 
+
+## Dataset
+
+The data can be downloaded from the following link: [lyrics to melody dataset](https://drive.google.com/file/d/19WGahKK7ozp1p82KkRF0mRTm48FMiTnE/view?usp=sharing) and can be augmented using a sliding window technique by executing the notebook located in `./notebooks/data_aug.ipynb`.
 
 ## Usage
 
