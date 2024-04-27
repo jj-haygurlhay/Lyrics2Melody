@@ -1,20 +1,21 @@
 model:
-  dropout: 0.4
-  encoder_hidden_size: 256
-  decoder_hidden_size: 256
-  embedding_dim: 130
-  num_layers: 4
+  type: 'Transformer' # or 'RNN'
+  dropout: 0.5
+  encoder_hidden_size: 64
+  decoder_hidden_size: 64
+  embedding_dim: 32
+  num_layers: 2
   expansion_factor: 4
-  num_heads: 8
+  num_heads: 4
 
 training:
-  batch_size: 256
+  batch_size: 1024
   epochs: 100
-  lr: 5e-7
-  weight_decay: 0.01
+  lr: 1e-6
+  weight_decay: 0.03
   train_encoder: False
   note_loss_weight: 1.25
-  duration_loss_weight: 0.75
+  duration_loss_weight: 0.5
   gap_loss_weight: 0.3
   print_predictions: True # print first eval predictions during training
   generate_temp: 0.6
@@ -22,9 +23,9 @@ training:
 data:
   data_dir: './data/data_aug_step20'
   max_sequence_length: 21 # include <sos>
-  octave_shift_percentage: 0.9
-  use_syllables: False
+  octave_shift_percentage: 0.8
+  use_syllables: True
 
 seed: 42
 out_dir: './runs/T5'
-add_to_run_name: ''
+add_to_runname: 'T5_shift0.8'

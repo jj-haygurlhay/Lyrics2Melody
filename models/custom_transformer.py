@@ -5,19 +5,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from project_utils.generation_utils import BeamHypotheses, top_k_top_p_filtering
 from project_utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
 
 class CustomModelTransformer(BaseModel):
 
-    def __init__(self, encoder, device, MAX_LENGTH=20, dropout_p=0.1, train_encoder=False, expansion_factor=4, num_heads=8, num_layers=2):
+    def __init__(self, encoder, EOS_token, SOS_token, device, MAX_LENGTH=21, dropout_p=0.1, train_encoder=False, expansion_factor=4, num_heads=8, num_layers=2):
         super().__init__()
         self.device = device
         self.MAX_LENGTH = MAX_LENGTH
-        self.SOS_token_note = len(MIDI_NOTES)
-        self.SOS_token_duration = len(DURATIONS)
-        self.SOS_token_gap = len(GAPS)
+        self.SOS_token = SOS_token
+        self.EOS_token = EOS_token
 
         # Take pretrained encoder
         self.encoder = encoder
@@ -25,9 +23,9 @@ class CustomModelTransformer(BaseModel):
         # Define decoder
         self.decoder = CustomTransformerDecoderMulti(
             hidden_size=encoder.config.n_positions,
-            output_size_note=len(MIDI_NOTES)+1,
-            output_size_duration=len(DURATIONS)+1,
-            output_size_gap=len(GAPS)+1,
+            output_size_note=len(MIDI_NOTES)+2,
+            output_size_duration=len(DURATIONS)+2,
+            output_size_gap=len(GAPS)+2,
             MAX_LENGTH=MAX_LENGTH,
             dropout_p=dropout_p,
             device=device,
@@ -72,20 +70,18 @@ class CustomModelTransformer(BaseModel):
 
         return note, duration, gap    
     
-    def generate(self, x, attn, do_sample=True, max_length=21, temperature=0.8, top_k=50, top_p=0.95, num_return_sequences=1, early_stopping=False, num_beams=1, min_length=10, use_cache=True, length_penalty=1.0):
-        # tensors for each SOS token
-        sos_note = torch.full((x.shape[0], 1), self.SOS_token_note, dtype=torch.int64).to(self.device)
-        sos_duration = torch.full((x.shape[0], 1), self.SOS_token_duration, dtype=torch.int64).to(self.device)
-        sos_gap = torch.full((x.shape[0], 1), self.SOS_token_gap, dtype=torch.int64).to(self.device)
-
+    def generate(self, x, attn, do_sample=True, max_length=21, temperature=0.5, top_k=None):
+        sos_note = torch.full((x.shape[0], 1), self.SOS_token, dtype=torch.int64).to(self.device)
+        sos_duration = torch.full((x.shape[0], 1), self.SOS_token, dtype=torch.int64).to(self.device)
+        sos_gap = torch.full((x.shape[0], 1), self.SOS_token, dtype=torch.int64).to(self.device)
         target = torch.cat([sos_note, sos_duration, sos_gap], dim=-1).unsqueeze(1)
         
+        # Encoder output
         encoder_output = self.encoder(x, attn, output_hidden_states=True, output_attentions=False)
-
         sampled_notes, sampled_durations, sampled_gaps = [], [], []
         logits_notes, logits_durations, logits_gaps = [], [], []
 
-        for _ in range(max_length):
+        for _ in range(self.MAX_LENGTH):
             target_mask = self.make_trg_mask(target)
             note_logits, duration_logits, gap_logits = self.decoder(target, encoder_output[0], target_mask)
 
@@ -95,19 +91,26 @@ class CustomModelTransformer(BaseModel):
             logits_gaps.append(gap_logits[:, -1, :].unsqueeze(1))
 
             if do_sample:
-                # Sample using temperature-scaled softmax
-                note = torch.softmax(note_logits[:, -1, :] / temperature, dim=-1)
-                duration = torch.softmax(duration_logits[:, -1, :] / temperature, dim=-1)
-                gap = torch.softmax(gap_logits[:, -1, :] / temperature, dim=-1)
+                # Apply temperature scaling and top-k sampling
+                note_logits = note_logits[:, -1, :] / temperature
+                duration_logits = duration_logits[:, -1, :] / temperature
+                gap_logits = gap_logits[:, -1, :] / temperature
 
-                note = torch.multinomial(note, 1) 
-                duration = torch.multinomial(duration, 1)
-                gap = torch.multinomial(gap, 1)
+                # Apply top-k sampling
+                if top_k is not None:
+                    note_logits = self.apply_top_k_sampling(note_logits, top_k[0])
+                    duration_logits = self.apply_top_k_sampling(duration_logits, top_k[1])
+                    gap_logits = self.apply_top_k_sampling(gap_logits, top_k[2])
+
+                # Sampling using softmax
+                note = torch.multinomial(torch.softmax(note_logits, dim=-1), 1)
+                duration = torch.multinomial(torch.softmax(duration_logits, dim=-1), 1)
+                gap = torch.multinomial(torch.softmax(gap_logits, dim=-1), 1)
             else:
                 # Use argmax
-                note = torch.argmax(note.unsqueeze(1), dim=-1, keepdim=True)
-                duration = torch.argmax(duration.unsqueeze(1), dim=-1, keepdim=True)
-                gap = torch.argmax(gap.unsqueeze(1), dim=-1, keepdim=True)
+                note = torch.argmax(note_logits.unsqueeze(1), dim=-1, keepdim=True)
+                duration = torch.argmax(duration_logits.unsqueeze(1), dim=-1, keepdim=True)
+                gap = torch.argmax(gap_logits.unsqueeze(1), dim=-1, keepdim=True)
 
             sampled_notes.append(note)
             sampled_durations.append(duration)
@@ -126,6 +129,14 @@ class CustomModelTransformer(BaseModel):
         logits_gaps = torch.cat(logits_gaps, dim=1)
 
         return sampled_notes, sampled_durations, sampled_gaps, logits_notes, logits_durations, logits_gaps
+
+    def apply_top_k_sampling(self, logits, top_k):
+        if top_k > 0:
+            top_values, _ = torch.topk(logits, top_k)
+            kth_value = top_values[:, -1].view(-1, 1)
+            mask = logits < kth_value
+            logits[mask] = -float('Inf')
+        return logits
 
 class CustomTransformerDecoderMulti(nn.Module):
     def __init__(self, hidden_size, output_size_note, output_size_duration, output_size_gap, MAX_LENGTH, dropout_p, device, num_layers=2, expansion_factor=4, n_heads=8,):

@@ -8,9 +8,11 @@ from project_utils.quantize import MIDI_NOTES, DURATIONS, GAPS
 
 class CustomModelRNN(BaseModel):
 
-    def __init__(self, input_size, encoder_hidden_size, embedding_dim, decoder_hidden_size, num_layers, device, SOS_token=0, MAX_LENGTH=100, dropout_p=0.1):
+    def __init__(self, input_size, EOS_token, SOS_token, encoder_hidden_size, embedding_dim, decoder_hidden_size, num_layers, device, MAX_LENGTH=100, dropout_p=0.1):
         super().__init__()
         self.device = device
+        self.SOS_token = SOS_token
+        self.EOS_token = EOS_token
 
         # Define Encoder
         self.encoder = EncoderRNN(
@@ -92,7 +94,7 @@ class Attention(nn.Module):
         return torch.softmax(attention, dim=1)
 
 class AttnDecoderRNN(nn.Module):
-    def __init__(self, embedding_dim, encoder_hidden_size, decoder_hidden_size, output_size_note, output_size_duration, output_size_gap, num_layers, dropout_p=0.1, device='cpu', SOS_token = 0, MAX_LENGTH = 100):
+    def __init__(self, embedding_dim, encoder_hidden_size, decoder_hidden_size, output_size_note, output_size_duration, output_size_gap, num_layers, dropout_p=0.1, device='cpu', SOS_token = 1, MAX_LENGTH = 100):
         super(AttnDecoderRNN, self).__init__()
         self.embedding = nn.Embedding(output_size_note + output_size_duration + output_size_gap, embedding_dim)
         self.attention = Attention(encoder_hidden_size, decoder_hidden_size)
